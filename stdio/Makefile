@@ -25,7 +25,7 @@ OPENCM3_DIR = ../libopencm3
 LDSCRIPT = ../stm32f103rb.ld
 OOCD_INTERFACE = stlink-v2-1
 OOCD_BOARD = st_nucleo_f103rb
-LDFLAGS_SYS =
+LDLIBS_SYS =
 #LDFLAGS += --specs=nano.specs
 
 include ../libopencm3.target.mk
