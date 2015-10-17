@@ -28,6 +28,7 @@ static
 int stdio_usart_write(int fd, char *ptr, int len)
 {
     int i;
+    /* TODO: non-blocking */
     for(i = 0; i < len; i++)
     {
         usart_send_blocking(USART2, ptr[i]);
@@ -38,6 +39,7 @@ int stdio_usart_write(int fd, char *ptr, int len)
 static
 int stdio_usart_read(int fd, char *ptr, int len)
 {
+    /* TODO */
     return 0;
 }
 
@@ -62,18 +64,39 @@ void stdio_usart_init(void)
 }
 
 
-__attribute__((__constructor__))
-void stdio_init(void)
+static
+void fileno_out_init(int fd)
 {
     struct fd *f;
-    stdio_usart_init();
-
-    f = syscall_get_file_struct(STDOUT_FILENO);
+    f = syscall_get_file_struct(fd);
 
     f->stat.st_mode = _IFCHR;
     f->write = stdio_usart_write;
     f->read = stdio_usart_read;
     f->isatty = 1;
     f->isopen = 1;
+}
+
+__attribute__((__constructor__))
+void stdio_init(void)
+{
+    stdio_usart_init();
+    fileno_out_init(STDOUT_FILENO);
+    fileno_out_init(STDERR_FILENO);
+}
+
+static
+void fileno_out_delete(int fd)
+{
+    struct fd *f;
+    f = syscall_get_file_struct(fd);
+    f->isopen = 0;
+}
+
+__attribute__((__destructor__))
+void stdio_delete(void)
+{
+    fileno_out_delete(STDOUT_FILENO);
+    fileno_out_delete(STDERR_FILENO);
 }
 
