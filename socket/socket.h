@@ -19,7 +19,7 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
-/* http://pubs.opengroup.org/onlinepubs/009695399/basedefs/sys/socket.h.html */
+/* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/sys_socket.h.html */
 
 #include <stdint.h>
 #include <sys/types.h>
