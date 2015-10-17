@@ -285,10 +285,6 @@
 #define W5100_Sn_RX_RSR_SIZE 2
 //TODO
 
-#define W5100_CONCAT_(a, b) a ## b
-
-#define W5100_REG_SIZE_GET(reg) W5100_CONCAT_(reg, _SIZE)
-
 
 extern
 void w5100_read_mem(uint16_t addr, void *buf, size_t n);
@@ -317,21 +313,27 @@ uint16_t w5100_sock_reg_get(uint16_t sn_reg, int socket)
         + (socket * W5100_SOCKET_REGS_SIZE);
 }
 
-#define w5100_read_regx(reg, buf) w5100_read_mem((reg), (buf), W5100_REG_SIZE_GET(reg))
+#define w5100_read_regx(reg, buf) w5100_read_mem((reg), (buf), reg ## _SIZE)
 
-#define w5100_write_regx(reg, buf) w5100_write_mem((reg), (buf), W5100_REG_SIZE_GET(reg))
+#define w5100_write_regx(reg, buf) w5100_write_mem((reg), (buf), reg ## _SIZE)
 
 #define w5100_read_sock_regx(sn_reg, socket, buf) \
     w5100_read_mem( \
             w5100_sock_reg_get((sn_reg), (socket)), \
             (buf), \
-            W5100_REG_SIZE_GET(sn_reg))
+            sn_reg ## _SIZE)
 
 #define w5100_write_sock_regx(sn_reg, socket, buf) \
     w5100_write_mem( \
             w5100_sock_reg_get((sn_reg), (socket)), \
             (buf), \
-            W5100_REG_SIZE_GET(sn_reg))
+            sn_reg ## _SIZE)
+
+#define w5100_read_sock_reg(sn_reg, socket) \
+    w5100_read_reg(w5100_sock_reg_get((sn_reg), (socket)))
+
+#define w5100_write_sock_reg(sn_reg, socket, val) \
+    w5100_write_reg(w5100_sock_reg_get((sn_reg), (socket)), (val))
 
 extern
 void w5100_init(void);
