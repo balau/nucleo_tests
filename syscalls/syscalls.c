@@ -53,6 +53,32 @@ struct fd *syscall_get_file_struct(int fd)
     return f;
 }
 
+int syscall_falloc(void)
+{
+    int fd;
+    int ret = -1;
+
+    /* starting from 3 because of STDIN, STDOUT, STDERR */
+    for (fd = 3; fd < NFILES_MAX; fd++)
+    {
+        if (!files[fd].isallocated)
+        {
+            files[fd].isallocated = 1;
+            ret = fd;
+            break;
+        }
+    }
+    return ret;
+}
+
+void syscall_ffree(int fd)
+{
+    if ((fd < NFILES_MAX) && (fd >= 0) && (files[fd].isallocated))
+    {
+        files[fd].isallocated = 0;
+    }
+}
+
 int _write (int fd, char *ptr, int len)
 {
     int ret;
@@ -225,8 +251,4 @@ _off_t _lseek(int fd, _off_t offset, int whence )
     }
     return ret;
 }
-
-
-
-
 

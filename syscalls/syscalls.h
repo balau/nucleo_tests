@@ -28,10 +28,17 @@ struct fd {
     int isopen;
     int (*write)(int, char*, int);
     int (*read)(int, char*, int);
+    int isallocated;
 };
 
 extern
 struct fd *syscall_get_file_struct(int fd);
+
+extern
+int syscall_falloc(void);
+
+extern
+void syscall_ffree(int fd);
 
 #endif
 
