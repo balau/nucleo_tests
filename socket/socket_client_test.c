@@ -4,25 +4,28 @@
 */
 #include <stdio.h> //printf
 #include <string.h>    //strlen
+#include <unistd.h>    //close
 #include "socket.h" //<sys/socket.h>    //socket
 #include "inet.h" //<arpa/inet.h> //inet_addr
- 
-int main(int argc , char *argv[])
+
+static
+int loop(void)
 {
     int sock;
     struct sockaddr_in server;
     char message[1000] , server_reply[2000];
-     
-    (void)argc;
-    (void)argv;
-
+    
+    printf("Press any key to continue...");
+    getchar();
+    printf("\n");
+    
     //Create socket
     sock = socket(AF_INET , SOCK_STREAM , 0);
     if (sock == -1)
     {
-        printf("Could not create socket");
+        printf("Could not create socket\n");
     }
-    puts("Socket created");
+    puts("Socket created\n");
      
     //server.sin_addr.s_addr = inet_addr("127.0.0.1");
     server.sin_addr.s_addr = inet_addr("192.168.1.173");
@@ -32,7 +35,7 @@ int main(int argc , char *argv[])
     //Connect to remote server
     if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
     {
-        perror("connect failed. Error");
+        perror("connect failed");
         return 1;
     }
      
@@ -64,5 +67,13 @@ int main(int argc , char *argv[])
      
     close(sock);
     return 0;
+}
+
+int main(void)
+{
+    while(1)
+    {
+        loop();
+    }
 }
 

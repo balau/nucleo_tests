@@ -162,7 +162,6 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         /* TODO: check EBADF */
         /* TODO: check ENOTSOCK */
         w5100_write_sock_reg(W5100_Sn_MR, isocket, 0x01); /* TCP */
-        w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port); /* Needed? */
         w5100_write_sock_reg(W5100_Sn_CR, isocket, 0x01); /* OPEN */
         w5100_write_sock_regx(W5100_Sn_DIPR, isocket, &server->sin_addr.s_addr);
         w5100_write_sock_regx(W5100_Sn_DPORT, isocket, &server->sin_port);

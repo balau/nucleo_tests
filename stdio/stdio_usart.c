@@ -18,11 +18,11 @@
  */
 #include "syscalls.h"
 #include <unistd.h>
+#include <errno.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/spi.h>
 #include <libopencm3/stm32/usart.h>
 #include <libopencm3/stm32/gpio.h>
-
 
 static
 int stdio_usart_write(int fd, char *ptr, int len)
@@ -39,8 +39,22 @@ int stdio_usart_write(int fd, char *ptr, int len)
 static
 int stdio_usart_read(int fd, char *ptr, int len)
 {
-    /* TODO */
-    return 0;
+    int nread = 0;
+
+    if (len > 0)
+    {
+        usart_wait_recv_ready(USART2);
+        do {
+            ptr[nread] = usart_recv(USART2);
+            nread++;
+        } while ((nread < len) && (USART_SR(USART2) & USART_SR_RXNE));
+        if (nread == 0)
+        {
+            errno = EAGAIN;
+            nread = -1;
+        }
+    }
+    return nread;
 }
 
 static
@@ -68,10 +82,24 @@ static
 void fileno_out_init(int fd)
 {
     struct fd *f;
+
     f = syscall_get_file_struct(fd);
 
     f->stat.st_mode = _IFCHR;
     f->write = stdio_usart_write;
+    //f->read = stdio_usart_read;
+    f->isatty = 1;
+    f->isopen = 1;
+}
+
+static
+void fileno_in_init(int fd)
+{
+    struct fd *f;
+    f = syscall_get_file_struct(fd);
+
+    f->stat.st_mode = _IFCHR;
+    //f->write = stdio_usart_write;
     f->read = stdio_usart_read;
     f->isatty = 1;
     f->isopen = 1;
@@ -81,6 +109,7 @@ __attribute__((__constructor__))
 void stdio_init(void)
 {
     stdio_usart_init();
+    fileno_in_init(STDIN_FILENO);
     fileno_out_init(STDOUT_FILENO);
     fileno_out_init(STDERR_FILENO);
 }
@@ -96,6 +125,7 @@ void fileno_out_delete(int fd)
 __attribute__((__destructor__))
 void stdio_delete(void)
 {
+    fileno_out_delete(STDIN_FILENO);
     fileno_out_delete(STDOUT_FILENO);
     fileno_out_delete(STDERR_FILENO);
 }

@@ -119,7 +119,7 @@ int _read (int fd, char *ptr, int len)
         errno = EBADF;
         ret = -1;
     }
-    else if (files[fd].write == NULL)
+    else if (files[fd].read == NULL)
     {
         errno = EBADF;
         ret = -1;
