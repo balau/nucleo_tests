@@ -48,9 +48,11 @@ void w5100_xfer_addr(uint16_t reg)
 static
 void w5100_write_byte(uint16_t reg, uint8_t val)
 {
+    w5100_select();
     (void)spi_xfer(SPI1, OP_WRITE);
     w5100_xfer_addr(reg);
     (void)spi_xfer(SPI1, val);
+    w5100_deselect();
 }
 
 static
@@ -58,9 +60,11 @@ uint8_t w5100_read_byte(uint16_t reg)
 {
     uint8_t rx;
 
+    w5100_select();
     (void)spi_xfer(SPI1, OP_READ);
     w5100_xfer_addr(reg);
     rx = spi_xfer(SPI1, 0x00);
+    w5100_deselect();
 
     return rx;
 }
@@ -69,9 +73,7 @@ uint8_t w5100_read_reg(uint16_t reg)
 {
     uint8_t rx;
 
-    w5100_select();
     rx = w5100_read_byte(reg);
-    w5100_deselect();
     
     return rx;
 }
@@ -81,7 +83,6 @@ uint16_t w5100_read_reg2(uint16_t reg)
     uint16_t rx;
     int16_t i_byte;
 
-    w5100_select();
     rx = 0;
     /* MSB first. */
     for (i_byte = 0; i_byte < 2; i_byte++)
@@ -89,23 +90,19 @@ uint16_t w5100_read_reg2(uint16_t reg)
         rx |= w5100_read_byte(reg + i_byte);
         rx <<= 8;
     }
-    w5100_deselect();
     
     return rx;
 }
 
 void w5100_write_reg(uint16_t reg, uint8_t val)
 {
-    w5100_select();
     w5100_write_byte(reg, val);
-    w5100_deselect();
 }
 
 void w5100_write_reg2(uint16_t reg, uint16_t val)
 {
     int16_t i_byte;
 
-    w5100_select();
     /* MSB first. */
     for (i_byte = 0; i_byte < 2; i_byte++)
     {
@@ -116,7 +113,6 @@ void w5100_write_reg2(uint16_t reg, uint16_t val)
         b = (val >> shiftr) & 0xFF;
         w5100_write_byte(reg + i_byte, b);
     }
-    w5100_deselect();
 }
 
 void w5100_read_mem(uint16_t addr, void *buf, size_t n)
@@ -124,12 +120,10 @@ void w5100_read_mem(uint16_t addr, void *buf, size_t n)
     uint8_t *pbytes = buf;
     size_t i_byte;
 
-    w5100_select();
     for (i_byte = 0; i_byte < n; i_byte++)
     {
         pbytes[i_byte] = w5100_read_byte(addr + i_byte);
     }
-    w5100_deselect();
 }
 
 void w5100_write_mem(uint16_t addr, const void *buf, size_t n)
@@ -137,12 +131,10 @@ void w5100_write_mem(uint16_t addr, const void *buf, size_t n)
     const uint8_t *pbytes = buf;
     size_t i_byte;
 
-    w5100_select();
     for (i_byte = 0; i_byte < n; i_byte++)
     {
         w5100_write_byte(addr + i_byte, pbytes[i_byte]);
     }
-    w5100_deselect();
 }
 
 static
