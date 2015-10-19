@@ -24,6 +24,7 @@ int loop(void)
     if (sock == -1)
     {
         printf("Could not create socket\n");
+        return 1;
     }
     puts("Socket created\n");
      
@@ -74,6 +75,7 @@ int main(void)
     while(1)
     {
         loop();
+        while(1);
     }
 }
 
