@@ -25,7 +25,7 @@
 #define W5100_SOCKET_FREE (-1)
 
 #ifndef W5100_IP_ADDR
-#  define W5100_IP_ADDR "192.168.1.100"
+#  define W5100_IP_ADDR "192.168.1.99"
 #endif
 #ifndef W5100_SUBNET
 #  define W5100_SUBNET "255.255.255.0"
@@ -138,6 +138,16 @@ int socket(int domain, int type, int protocol)
     return ret;
 }
 
+static
+void w5100_command(int isocket, uint8_t cmd)
+{
+    w5100_write_sock_reg(W5100_Sn_CR, isocket, cmd);
+    while (w5100_read_sock_reg(W5100_Sn_CR, isocket))
+    {
+        continue;
+    }
+}
+
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int ret;
@@ -162,13 +172,18 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         /* TODO: check EBADF */
         /* TODO: check ENOTSOCK */
         w5100_write_sock_reg(W5100_Sn_MR, isocket, 0x01); /* TCP */
-        w5100_write_sock_reg(W5100_Sn_CR, isocket, 0x01); /* OPEN */
-        w5100_write_sock_regx(W5100_Sn_DIPR, isocket, &server->sin_addr.s_addr);
-        w5100_write_sock_regx(W5100_Sn_DPORT, isocket, &server->sin_port);
-        w5100_write_sock_reg(W5100_Sn_CR, isocket, 0x04); /* CONNECT */
+        w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port);
+        w5100_command(isocket, 0x01); /* OPEN */
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
-        } while ((sr == 0x01) || (sr == 0x15)); /* INIT or SYNSENT */
+        } while (sr != 0x13); /* INIT */
+
+        w5100_write_sock_regx(W5100_Sn_DIPR, isocket, &server->sin_addr.s_addr);
+        w5100_write_sock_regx(W5100_Sn_DPORT, isocket, &server->sin_port);
+        w5100_command(isocket, 0x04); /* CONNECT */
+        do {
+            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+        } while ((sr != 0x00) && (sr != 0x17)); /* CLOSED or ESTABLISHED */
         if (sr == 0x17) /* ESTABLISHED */
         {
             ret = 0;
