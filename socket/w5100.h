@@ -285,6 +285,71 @@
 #define W5100_Sn_RX_RSR_SIZE 2
 //TODO
 
+/* Modes */
+#define W5100_MODE_IND      0x01
+#define W5100_MODE_AI       0x02
+#define W5100_MODE_PPPOE    0x08
+#define W5100_MODE_PB       0x10
+#define W5100_MODE_RST      0x80
+
+/* Socket modes */
+#define W5100_SOCK_MODE_CLOSED   0x00
+#define W5100_SOCK_MODE_TCP      0x01
+#define W5100_SOCK_MODE_UDP      0x02
+#define W5100_SOCK_MODE_IPRAW    0x03
+#define W5100_SOCK_MODE_MACRAW   0x04
+#define W5100_SOCK_MODE_PPPOE    0x05
+#define W5100_SOCK_MODE_ND       0x20
+#define W5100_SOCK_MODE_MC       0x20
+#define W5100_SOCK_MODE_MULTI    0x80
+
+/* Commands */
+#define W5100_CMD_OPEN      0x01
+#define W5100_CMD_LISTEN    0x02
+#define W5100_CMD_CONNECT   0x04
+#define W5100_CMD_DISCON    0x08
+#define W5100_CMD_CLOSE     0x10
+#define W5100_CMD_SEND      0x20
+#define W5100_CMD_SEND_MAC  0x21
+#define W5100_CMD_SEND_KEEP 0x22
+#define W5100_CMD_RECV      0x40
+
+/* Socket states */
+#define W5100_SOCK_CLOSED       0x00
+#define W5100_SOCK_INIT         0x13
+#define W5100_SOCK_LISTEN       0x14
+#define W5100_SOCK_ESTABLISHED  0x17
+#define W5100_SOCK_CLOSE_WAIT   0x1C
+#define W5100_SOCK_UDP          0x22
+#define W5100_SOCK_IPRAW        0x32
+#define W5100_SOCK_MACRAW       0x42
+#define W5100_SOCK_PPPOE        0x5F
+#define W5100_SOCK_SYNSENT      0x15
+#define W5100_SOCK_SYNRECV      0x16
+#define W5100_SOCK_FIN_WAIT     0x18
+#define W5100_SOCK_CLOSING      0x1A
+#define W5100_SOCK_TIME_WAIT    0x1B
+#define W5100_SOCK_LAST_ACK     0x1D
+#define W5100_SOCK_ARP          0x11
+#define W5100_SOCK_ARP1         0x11
+#define W5100_SOCK_ARP2         0x21
+#define W5100_SOCK_ARP3         0x31
+
+/* Interrupts */
+#define W5100_S0_INT        0x01
+#define W5100_S1_INT        0x02
+#define W5100_S2_INT        0x04
+#define W5100_S3_INT        0x08
+#define W5100_INT_PPPOE     0x20
+#define W5100_INT_UNREACH   0x40
+#define W5100_INT_CONFLICT  0x80
+
+/* Socket interrupts */
+#define W5100_INT_CON       0x01
+#define W5100_INT_DISCON    0x02
+#define W5100_INT_RECV      0x04
+#define W5100_INT_TIMEOUT   0x08
+#define W5100_INT_SEND_OK   0x10
 
 extern
 void w5100_read_mem(uint16_t addr, void *buf, size_t n);
