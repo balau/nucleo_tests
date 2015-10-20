@@ -23,12 +23,11 @@ int loop(void)
     sock = socket(AF_INET , SOCK_STREAM , 0);
     if (sock == -1)
     {
-        printf("Could not create socket\n");
+        perror("socket creation failed");
         return 1;
     }
     puts("Socket created\n");
      
-    //server.sin_addr.s_addr = inet_addr("127.0.0.1");
     server.sin_addr.s_addr = inet_addr("192.168.1.173");
     server.sin_family = AF_INET;
     server.sin_port = htons( 8888 );
@@ -37,6 +36,7 @@ int loop(void)
     if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
     {
         perror("connect failed");
+        close(sock);
         return 1;
     }
      
@@ -51,14 +51,15 @@ int loop(void)
         //Send some data
         if( send(sock , message , strlen(message) , 0) < 0)
         {
-            puts("Send failed");
+            perror("Send failed");
+            close(sock);
             return 1;
         }
          
         //Receive a reply from the server
         if( recv(sock , server_reply , 2000 , 0) < 0)
         {
-            puts("recv failed");
+            perror("recv failed");
             break;
         }
          
@@ -75,7 +76,6 @@ int main(void)
     while(1)
     {
         loop();
-        while(1);
     }
 }
 
