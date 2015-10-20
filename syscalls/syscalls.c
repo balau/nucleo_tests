@@ -170,6 +170,10 @@ int _close(int fd)
         errno = EBADF;
         ret = -1;
     }
+    else if (files[fd].close != NULL)
+    {
+        ret = files[fd].close(fd);
+    }
     else
     {
         /* TODO */
