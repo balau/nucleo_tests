@@ -117,17 +117,13 @@ void socket_free(int isocket)
 static
 int w5100_sock_write(int fd, char *buf, int len)
 {
-    //TODO
-    errno = EBADF;
-    return -1;
+    return send(fd, buf, len, 0);
 }
 
 static
 int w5100_sock_read(int fd, char *buf, int len)
 {
-    //TODO
-    errno = EBADF;
-    return -1;
+    return recv(fd, buf, len, 0);
 }
 
 static
@@ -296,6 +292,44 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     return ret;
 }
 
+static
+uint16_t get_tx_size(int isocket)
+{
+    (void)isocket;
+    return 0x800; /* 2KiB */
+}
+
+static
+uint16_t get_tx_mask(int isocket)
+{
+    return get_tx_size(isocket) - 1; /* size is always power of 2 */
+}
+
+static
+uint16_t get_tx_base(int isocket)
+{
+    return W5100_TX_MEM_BASE + get_tx_size(isocket) * isocket;
+}
+
+static
+uint16_t get_rx_size(int isocket)
+{
+    (void)isocket;
+    return 0x800; /* 2KiB */
+}
+
+static
+uint16_t get_rx_mask(int isocket)
+{
+    return get_rx_size(isocket) - 1; /* size is always power of 2 */
+}
+
+static
+uint16_t get_rx_base(int isocket)
+{
+    return W5100_RX_MEM_BASE + get_rx_size(isocket) * isocket;
+}
+
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     (void)sockfd;
@@ -309,13 +343,67 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
-    (void)sockfd;
-    (void)buf;
-    (void)len;
-    (void)flags;
-    /* TODO */
-    errno = ENOTCONN;
-    return -1;
+    int isocket;
+    ssize_t ret;
+
+    (void)flags; /* TODO */
+
+    isocket = fd_to_isocket(sockfd);
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = 1;
+    }
+    else
+    {
+        uint16_t nfree;
+        uint16_t pwrite;
+        uint16_t offset;
+        uint16_t phys;
+        uint16_t towrite;
+        uint16_t towrite1;
+        uint16_t towrite2;
+        uint16_t newwr;
+        const uint8_t *bytes = buf;
+
+        w5100_read_sock_regx(W5100_Sn_TX_FSR, isocket, &nfree);
+        nfree = ntohs(nfree);
+        w5100_read_sock_regx(W5100_Sn_TX_WR, isocket, &pwrite);
+        pwrite = ntohs(pwrite);
+        offset = pwrite & get_tx_mask(isocket);
+        phys = offset + get_tx_base(isocket);
+        if (len > nfree)
+        {
+            towrite = nfree;
+        }
+        else
+        {
+            towrite = len;
+        }
+        if (towrite > (get_tx_size(isocket) - offset))
+        {
+            towrite1 = get_tx_size(isocket) - offset;
+            towrite2 = towrite - towrite1;
+        }
+        else
+        {
+            towrite1 = towrite;
+            towrite2 = 0;
+        }
+        if (towrite1 > 0)
+        {
+            w5100_write_mem(phys, &bytes[0], towrite1);
+        }
+        if (towrite2 > 0)
+        {
+            w5100_write_mem(get_tx_base(isocket), &bytes[towrite1], towrite2);
+        }
+        newwr = htons(pwrite + towrite);
+        w5100_write_sock_regx(W5100_Sn_TX_WR, isocket, &newwr);
+        w5100_command(isocket, W5100_CMD_SEND);
+        ret = towrite;
+    }
+    return ret;
 }
 
 __attribute__((__constructor__))

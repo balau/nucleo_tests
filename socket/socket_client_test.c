@@ -49,7 +49,7 @@ int loop(void)
         scanf("%s" , message);
          
         //Send some data
-        if( send(sock , message , strlen(message) , 0) < 0)
+        if( send(sock , message , strlen(message)+1 , 0) < 0)
         {
             perror("Send failed");
             close(sock);
