@@ -153,7 +153,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     int ret;
     int isocket;
 
-    isocket = isocket_to_fd(sockfd);
+    isocket = fd_to_isocket(sockfd);
 
     if ( addr->sa_family != AF_INET )
     {
@@ -171,24 +171,24 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         /* TODO: check if already in use EADDRINUSE */
         /* TODO: check EBADF */
         /* TODO: check ENOTSOCK */
-        w5100_write_sock_reg(W5100_Sn_MR, isocket, 0x01); /* TCP */
+        /* TODO: check TCP */
         w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port);
-        w5100_command(isocket, 0x01); /* OPEN */
+        w5100_command(isocket, W5100_CMD_OPEN); /* OPEN */
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
-        } while (sr != 0x13); /* INIT */
+        } while (sr != W5100_SOCK_INIT);
 
         w5100_write_sock_regx(W5100_Sn_DIPR, isocket, &server->sin_addr.s_addr);
         w5100_write_sock_regx(W5100_Sn_DPORT, isocket, &server->sin_port);
-        w5100_command(isocket, 0x04); /* CONNECT */
+        w5100_command(isocket, W5100_CMD_CONNECT);
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
-        } while ((sr != 0x00) && (sr != 0x17)); /* CLOSED or ESTABLISHED */
-        if (sr == 0x17) /* ESTABLISHED */
+        } while ((sr != W5100_SOCK_CLOSED) && (sr != W5100_SOCK_ESTABLISHED));
+        if (sr == W5100_SOCK_ESTABLISHED) /* ESTABLISHED */
         {
             ret = 0;
         }
-        else if (sr == 0x00)
+        else if (sr == W5100_SOCK_CLOSED)
         {
             errno = ETIMEDOUT;
             ret = -1;
@@ -232,8 +232,8 @@ void w5100_socket_init(void)
 
     w5100_init();
 
-    w5100_write_reg(W5100_MR, 0x80); /* RST */
-    while(w5100_read_reg(W5100_MR) & 0x80) /* RST bit clears by itself */
+    w5100_write_reg(W5100_MR, W5100_MODE_RST); /* RST */
+    while(w5100_read_reg(W5100_MR) & W5100_MODE_RST) /* RST bit clears by itself */
     {
         continue;
     }
