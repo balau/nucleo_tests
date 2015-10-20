@@ -21,6 +21,7 @@
 #include "socket.h"
 #include "w5100.h"
 #include "inet.h" // <arpa/inet.h>
+#include "syscalls.h"
 
 #define W5100_SOCKET_FREE (-1)
 
@@ -36,6 +37,10 @@
 
 void w5100_socket_init(void);
 
+static
+void w5100_command(int isocket, uint8_t cmd);
+
+
 static struct w5100_socket {
     int fd;
 } w5100_sockets[W5100_N_SOCKETS];
@@ -45,15 +50,36 @@ static uint8_t w5100_mac_addr[6] = {0x80, 0x81, 0x82, 0x83, 0x84, 0x85};
 static
 int isocket_to_fd(int isocket)
 {
-    //TODO
-    return isocket;
+    int fd;
+
+    if (isocket < 0 || isocket >= W5100_N_SOCKETS)
+    {
+        fd = -1;
+    }
+    else
+    {
+        fd = w5100_sockets[isocket].fd;
+    }
+    return fd;
 }
 
 static
 int fd_to_isocket(int fd)
 {
-    //TODO
-    return fd;
+    int isocket;
+
+    for (isocket = 0; isocket < W5100_N_SOCKETS; isocket++)
+    {
+        if (fd == w5100_sockets[isocket].fd)
+        {
+            break;
+        }
+    }
+    if (isocket >= W5100_N_SOCKETS)
+    {
+        isocket = -1;
+    }
+    return isocket;
 }
 
 static
@@ -89,6 +115,52 @@ void socket_free(int isocket)
 }
 
 static
+int w5100_sock_write(int fd, char *buf, int len)
+{
+    //TODO
+    errno = EBADF;
+    return -1;
+}
+
+static
+int w5100_sock_read(int fd, char *buf, int len)
+{
+    //TODO
+    errno = EBADF;
+    return -1;
+}
+
+static
+int w5100_sock_close(int fd)
+{
+    int isocket;
+    int ret;
+
+    isocket = fd_to_isocket(fd);
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else
+    {
+        struct fd *fds;
+        uint8_t sr;
+        
+        fds = syscall_get_file_struct(fd);
+        fds->isopen = 0;
+        syscall_ffree(fd);
+        w5100_command(isocket, W5100_CMD_CLOSE);
+        do {
+            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+        } while (sr != W5100_SOCK_CLOSED);
+        socket_free(isocket);
+        ret = 0;
+    }
+    return ret;
+}
+
+static
 int tcp_create(void)
 {
     int isocket;
@@ -96,10 +168,32 @@ int tcp_create(void)
     isocket = socket_alloc();
     if (isocket != -1)
     {
-        w5100_write_reg(
-                w5100_sock_reg_get(W5100_Sn_MR, isocket),
-                0x01 /* TCP */
-                );
+        int fd;
+        
+        fd = syscall_falloc();
+        if (fd == -1)
+        {
+            isocket = -1;
+            errno = ENFILE;
+        }
+        else
+        {
+            struct fd *fds;
+            
+            fds = syscall_get_file_struct(fd);
+            fds->isatty = 0;
+            fds->isopen = 1;
+            fds->write = w5100_sock_write;
+            fds->read = w5100_sock_read;
+            fds->close = w5100_sock_close;
+            
+            w5100_sockets[isocket].fd = fd;
+            w5100_write_sock_reg(W5100_Sn_MR, isocket, W5100_SOCK_MODE_TCP);
+        }
+    }
+    else
+    {
+        errno = ENOMEM;
     }
     return isocket;
 }
@@ -173,7 +267,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         /* TODO: check ENOTSOCK */
         /* TODO: check TCP */
         w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port);
-        w5100_command(isocket, W5100_CMD_OPEN); /* OPEN */
+        w5100_command(isocket, W5100_CMD_OPEN);
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
         } while (sr != W5100_SOCK_INIT);
@@ -184,7 +278,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
         } while ((sr != W5100_SOCK_CLOSED) && (sr != W5100_SOCK_ESTABLISHED));
-        if (sr == W5100_SOCK_ESTABLISHED) /* ESTABLISHED */
+        if (sr == W5100_SOCK_ESTABLISHED)
         {
             ret = 0;
         }
