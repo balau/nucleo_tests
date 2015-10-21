@@ -332,13 +332,73 @@ uint16_t get_rx_base(int isocket)
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
-    (void)sockfd;
-    (void)buf;
-    (void)len;
-    (void)flags;
-    /* TODO */
-    errno = ENOTCONN;
-    return -1;
+    int isocket;
+    ssize_t ret;
+
+    (void)flags; /* TODO */
+
+    isocket = fd_to_isocket(sockfd);
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = 1;
+    }
+    else if (len == 0)
+    {
+        ret = 0;
+    }
+    else
+    {
+        uint16_t toread;
+
+        do
+        {
+            w5100_read_sock_regx(W5100_Sn_RX_RSR, isocket, &toread);
+            toread = ntohs(toread);
+            if (toread != 0)
+            {
+                uint16_t pread;
+                uint16_t offset;
+                uint16_t phys;
+                uint16_t toread1;
+                uint16_t toread2;
+                uint16_t newrd;
+                uint8_t *bytes = buf;
+
+                if (len < toread)
+                {
+                    toread = len;
+                }
+                w5100_read_sock_regx(W5100_Sn_RX_RD, isocket, &pread);
+                pread = ntohs(pread);
+                offset = pread & get_rx_mask(isocket);
+                phys = get_rx_base(isocket) + offset;
+                if (offset + toread > get_rx_size(isocket))
+                {
+                    toread1 = get_rx_size(isocket) - offset;
+                    toread2 = toread - toread1;
+                }
+                else
+                {
+                    toread1 = toread;
+                    toread2 = 0;
+                }
+                if (toread1 > 0)
+                {
+                    w5100_read_mem(phys, &bytes[0], toread1);
+                }
+                if (toread2 > 0)
+                {
+                    w5100_read_mem(get_rx_base(isocket), &bytes[toread1], toread2);
+                }
+                newrd = htons(pread + toread);
+                w5100_write_sock_regx(W5100_Sn_RX_RD, isocket, &newrd);
+                w5100_command(isocket, W5100_CMD_RECV);
+            }
+        } while(toread == 0);
+        ret = toread;
+    }
+    return ret;
 }
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
@@ -425,6 +485,7 @@ void w5100_socket_init(void)
         w5100_sockets[i].fd = W5100_SOCKET_FREE;
     }
     w5100_write_reg(W5100_RMSR, 0x55); /* 2KiB per socket */
+    w5100_write_reg(W5100_TMSR, 0x55); /* 2KiB per socket */
     w5100_write_regx(W5100_SHAR, w5100_mac_addr);
     addr = inet_addr(W5100_IP_ADDR);
     w5100_write_regx(W5100_SIPR, &addr);
