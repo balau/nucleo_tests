@@ -138,7 +138,8 @@ flash: $(BINARY).flash
 
 debug: $(BINARY).elf
 	$(Q)$(GDB) \
-		-ex "target remote | $(OOCD) -f interface/$(OOCD_INTERFACE).cfg -f board/$(OOCD_BOARD).cfg -f ../gdb-pipe.cfg" \
+		-ex "target remote | $(OOCD) -f interface/$(OOCD_INTERFACE).cfg -f board/$(OOCD_BOARD).cfg -f $(ROOT_DIR)/scripts/gdb-pipe.cfg" \
+		-ex "symb $(BINARY).elf" \
 		-ex "monitor halt" \
 		-ex "monitor gdb_sync" \
 		-ex "stepi"
