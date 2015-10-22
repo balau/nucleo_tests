@@ -180,7 +180,7 @@ debug: $(BINARY).elf
 
 clean:
 	@#printf "  CLEAN\n"
-	$(Q)$(RM) *.o *.d *.elf *.bin *.hex *.srec *.list *.map
+	$(Q)$(RM) *.o *.d *.elf *.bin *.hex *.srec *.list *.map $(OBJS) $(OBJS:.o=.d)
 
 stylecheck: $(STYLECHECKFILES:=.stylecheck)
 styleclean: $(STYLECHECKFILES:=.styleclean)
