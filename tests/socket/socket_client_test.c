@@ -5,8 +5,8 @@
 #include <stdio.h> //printf
 #include <string.h>    //strlen
 #include <unistd.h>    //close
-#include "socket.h" //<sys/socket.h>    //socket
-#include "inet.h" //<arpa/inet.h> //inet_addr
+#include <sys/socket.h>    //socket
+#include <arpa/inet.h> //inet_addr
 
 static
 int loop(void)

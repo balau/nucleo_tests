@@ -22,7 +22,7 @@
 /* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/arpa_inet.h.html */
 
 #include <inttypes.h>
-#include "in.h" // <netinet/in.h>
+#include <netinet/in.h>
 
 uint32_t htonl(uint32_t);
 uint16_t htons(uint16_t);

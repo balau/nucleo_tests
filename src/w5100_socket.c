@@ -16,12 +16,11 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <errno.h>
-/* #include <sys/socket.h> */
-#include "socket.h"
-#include "w5100.h"
-#include "inet.h" // <arpa/inet.h>
 #include "syscalls.h"
+#include "w5100.h"
 
 #define W5100_SOCKET_FREE (-1)
 

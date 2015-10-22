@@ -22,8 +22,8 @@
 /* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/netinet_in.h.html */
 
 #include <inttypes.h>
-#include "socket.h" // <sys/socket.h>
-#include "inet.h" // <arpa/inet.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 typedef uint16_t in_port_t;
 
