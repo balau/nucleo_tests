@@ -5,5 +5,7 @@ LDSCRIPT = $(ROOT_DIR)/scripts/stm32f103rb.ld
 OOCD_INTERFACE = stlink-v2-1
 OOCD_BOARD = st_nucleo_f103rb
 
+CPPFLAGS += -I$(ROOT_DIR)/include
+
 include $(ROOT_DIR)/scripts/libopencm3.target.mk
 
