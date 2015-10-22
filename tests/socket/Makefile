@@ -18,17 +18,12 @@
 #
 
 BINARY = socket_client_test
-OBJS += w5100_socket.o
-OBJS += w5100_spi.o
-OBJS += inet.o
-OBJS += ../stdio/stdio_usart.o
-OBJS += ../syscalls/syscalls.o
-CPPFLAGS += -I../syscalls
-OPENCM3_DIR = ../libopencm3
-LDSCRIPT = ../stm32f103rb.ld
-OOCD_INTERFACE = stlink-v2-1
-OOCD_BOARD = st_nucleo_f103rb
+OBJS += $(ROOT_DIR)/src/w5100_socket.o
+OBJS += $(ROOT_DIR)/src/w5100_spi.o
+OBJS += $(ROOT_DIR)/src/inet.o
+OBJS += $(ROOT_DIR)/src/stdio_usart.o
+OBJS += $(ROOT_DIR)/src/syscalls.o
 LDLIBS_SYS =
 
-include ../libopencm3.target.mk
+include ../test.mk
 
