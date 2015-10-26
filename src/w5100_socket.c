@@ -244,7 +244,12 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     isocket = fd_to_isocket(sockfd);
 
-    if ( addr->sa_family != AF_INET )
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if ( addr->sa_family != AF_INET )
     {
         errno = EAFNOSUPPORT;
         ret = -1;
@@ -287,6 +292,106 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
             errno = ETIMEDOUT; /* TODO: better error? */
             ret = -1;
         }
+    }
+    return ret;
+}
+
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    int ret;
+    int isocket;
+
+    isocket = fd_to_isocket(sockfd);
+
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if ( addr->sa_family != AF_INET )
+    {
+        errno = EAFNOSUPPORT;
+        ret = -1;
+    }
+    else /* TODO: UPD and RAW */
+    {
+        struct sockaddr_in *server;
+        uint8_t sr;
+
+        (void)addrlen;
+        
+        server = (struct sockaddr_in *)addr;
+        /* TODO: check if already in use EADDRINUSE */
+        /* TODO: check EBADF */
+        /* TODO: check ENOTSOCK */
+        /* TODO: check TCP */
+        w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port);
+        w5100_command(isocket, W5100_CMD_OPEN);
+        do {
+            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+        } while (sr != W5100_SOCK_INIT);
+        ret = 0;
+    }
+    return ret;
+}
+
+int listen(int sockfd, int backlog)
+{
+    int ret;
+    int isocket;
+
+    isocket = fd_to_isocket(sockfd);
+
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else /* TODO: UPD and RAW */
+    {
+        uint8_t sr;
+        /* TODO: check if already in use EADDRINUSE */
+        /* TODO: check that backlog is 0 */
+        (void)backlog;
+        w5100_command(isocket, W5100_CMD_LISTEN);
+        do {
+            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+        } while ((sr != W5100_SOCK_LISTEN) && (sr != W5100_SOCK_ESTABLISHED));
+        ret = 0;
+    }
+    return ret;
+}
+
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    int ret;
+    int isocket;
+
+    isocket = fd_to_isocket(sockfd);
+
+    if (isocket == -1)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else /* TODO: UPD and RAW */
+    {
+        uint8_t sr;
+        struct sockaddr_in *client;
+
+        (void)addrlen;
+        
+        client = (struct sockaddr_in *)addr;
+
+        do {
+            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+        } while (sr != W5100_SOCK_ESTABLISHED);
+        /* TODO: new sockfd */
+        addr->sa_family = AF_INET;
+        w5100_read_sock_regx(W5100_Sn_DIPR, isocket, &client->sin_addr.s_addr);
+        w5100_read_sock_regx(W5100_Sn_DPORT, isocket, &client->sin_port);
+
+        ret = sockfd;
     }
     return ret;
 }
