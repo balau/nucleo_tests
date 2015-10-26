@@ -8,6 +8,14 @@
 #include <sys/socket.h>    //socket
 #include <arpa/inet.h> //inet_addr
 
+#ifndef SERVER_IP_ADDR
+#  define SERVER_IP_ADDR "192.168.1.173"
+#endif
+
+#ifndef SERVER_PORT
+#  define SERVER_PORT 8888
+#endif
+
 static
 int loop(void)
 {
@@ -28,9 +36,9 @@ int loop(void)
     }
     puts("Socket created\n");
      
-    server.sin_addr.s_addr = inet_addr("192.168.1.173");
+    server.sin_addr.s_addr = inet_addr(SERVER_IP_ADDR);
     server.sin_family = AF_INET;
-    server.sin_port = htons( 8888 );
+    server.sin_port = htons( SERVER_PORT );
  
     //Connect to remote server
     if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
