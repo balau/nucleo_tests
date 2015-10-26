@@ -8,13 +8,18 @@
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
 #include <unistd.h>    //write
- 
-int main(int argc , char *argv[])
+
+static
+int loop(void)
 {
     int socket_desc , client_sock , c , read_size;
     struct sockaddr_in server , client;
     char client_message[2000];
      
+    printf("Press any key to continue...");
+    getchar();
+    printf("\n");
+    
     //Create socket
     socket_desc = socket(AF_INET , SOCK_STREAM , 0);
     if (socket_desc == -1)
@@ -72,5 +77,13 @@ int main(int argc , char *argv[])
     }
      
     return 0;
+}
+
+int main(void)
+{
+    while(1)
+    {
+        loop();
+    }
 }
 
