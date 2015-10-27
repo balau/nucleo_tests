@@ -379,14 +379,14 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
         uint8_t sr;
         struct sockaddr_in *client;
 
-        (void)addrlen;
-        
-        client = (struct sockaddr_in *)addr;
 
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
         } while (sr != W5100_SOCK_ESTABLISHED);
         /* TODO: new sockfd */
+
+        *addrlen = sizeof(struct sockaddr_in);
+        client = (struct sockaddr_in *)addr;
         addr->sa_family = AF_INET;
         w5100_read_sock_regx(W5100_Sn_DIPR, isocket, &client->sin_addr.s_addr);
         w5100_read_sock_regx(W5100_Sn_DPORT, isocket, &client->sin_port);
