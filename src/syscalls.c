@@ -64,7 +64,7 @@ int syscall_falloc(void)
         if (!files[fd].isallocated)
         {
             files[fd].isallocated = 1;
-            files[fd].fd = fd;
+            files[fd].stat.st_ino = fd;
             ret = fd;
             break;
         }
@@ -77,7 +77,7 @@ void syscall_ffree(int fd)
     if ((fd < NFILES_MAX) && (fd >= 0) && (files[fd].isallocated))
     {
         files[fd].isallocated = 0;
-        files[fd].fd = -1;
+        files[fd].stat.st_ino = -1;
     }
 }
 
