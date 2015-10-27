@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 
 struct fd {
+    int fd;
     struct stat stat;
     int isatty;
     int isopen;
@@ -30,6 +31,7 @@ struct fd {
     int (*read)(int, char*, int);
     int (*close)(int);
     int isallocated;
+    void *opaque;
 };
 
 extern
