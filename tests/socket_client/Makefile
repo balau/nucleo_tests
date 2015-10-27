@@ -17,7 +17,7 @@
 #    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-BINARY = socket_client_test
+BINARY = client
 OBJS += $(ROOT_DIR)/src/w5100_socket.o
 OBJS += $(ROOT_DIR)/src/w5100_spi.o
 OBJS += $(ROOT_DIR)/src/inet.o
