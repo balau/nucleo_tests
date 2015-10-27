@@ -17,7 +17,7 @@
 #    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-BINARY = socket_server_test
+BINARY = server
 OBJS += $(ROOT_DIR)/src/w5100_socket.o
 OBJS += $(ROOT_DIR)/src/w5100_spi.o
 OBJS += $(ROOT_DIR)/src/inet.o
@@ -26,7 +26,4 @@ OBJS += $(ROOT_DIR)/src/syscalls.o
 LDLIBS_SYS =
 
 include ../test.mk
-
-socket_server_test.c: ../socket/host/server.c
-	cp $< $@
 
