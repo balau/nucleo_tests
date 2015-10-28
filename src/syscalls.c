@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "syscalls.h"
 
@@ -63,8 +64,10 @@ int syscall_falloc(void)
     {
         if (!files[fd].isallocated)
         {
+            memset(&files[fd], 0, sizeof(files[fd]));
+            
             files[fd].isallocated = 1;
-            files[fd].stat.st_ino = fd;
+            files[fd].fd = fd;
             ret = fd;
             break;
         }
@@ -77,7 +80,6 @@ void syscall_ffree(int fd)
     if ((fd < NFILES_MAX) && (fd >= 0) && (files[fd].isallocated))
     {
         files[fd].isallocated = 0;
-        files[fd].stat.st_ino = -1;
     }
 }
 

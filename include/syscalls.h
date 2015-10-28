@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 
 struct fd {
+    int fd;
     struct stat stat;
     int isatty;
     int isopen;

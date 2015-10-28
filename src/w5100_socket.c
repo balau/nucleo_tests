@@ -86,7 +86,7 @@ int fd_to_isocket(int fd)
         }
         if (w5100_sockets[isocket].connection_data != NULL)
         {
-            if (w5100_sockets[isocket].connection_data->stat.st_ino == fd)
+            if (w5100_sockets[isocket].connection_data->fd == fd)
             {
                 break;
             }
