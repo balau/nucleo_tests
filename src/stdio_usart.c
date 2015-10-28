@@ -24,11 +24,21 @@
 #include <libopencm3/stm32/usart.h>
 #include <libopencm3/stm32/gpio.h>
 
+extern
+void stdio_init(void);
+
+extern
+void stdio_delete(void);
+
 static
 int stdio_usart_write(int fd, char *ptr, int len)
 {
     int i;
+    struct fd *f;
+
+    f = syscall_get_file_struct(fd);
     /* TODO: non-blocking */
+    (void)f;
     for(i = 0; i < len; i++)
     {
         usart_send_blocking(USART2, ptr[i]);
@@ -40,7 +50,10 @@ static
 int stdio_usart_read(int fd, char *ptr, int len)
 {
     int nread = 0;
+    struct fd *f;
 
+    f = syscall_get_file_struct(fd);
+    (void)f;
     if (len > 0)
     {
         usart_wait_recv_ready(USART2);
@@ -77,7 +90,6 @@ void stdio_usart_init(void)
 	usart_enable(USART2);
 }
 
-
 static
 void fileno_out_init(int fd)
 {
@@ -85,9 +97,9 @@ void fileno_out_init(int fd)
 
     f = syscall_get_file_struct(fd);
 
-    f->stat.st_mode = _IFCHR;
+    f->fd = fd;
+    f->stat.st_mode = S_IFCHR|S_IWUSR|S_IWGRP|S_IWOTH;
     f->write = stdio_usart_write;
-    //f->read = stdio_usart_read;
     f->isatty = 1;
     f->isopen = 1;
 }
@@ -98,8 +110,8 @@ void fileno_in_init(int fd)
     struct fd *f;
     f = syscall_get_file_struct(fd);
 
-    f->stat.st_mode = _IFCHR;
-    //f->write = stdio_usart_write;
+    f->fd = fd;
+    f->stat.st_mode = S_IFCHR|S_IRUSR|S_IRGRP|S_IROTH;
     f->read = stdio_usart_read;
     f->isatty = 1;
     f->isopen = 1;
@@ -115,7 +127,7 @@ void stdio_init(void)
 }
 
 static
-void fileno_out_delete(int fd)
+void fileno_delete(int fd)
 {
     struct fd *f;
     f = syscall_get_file_struct(fd);
@@ -125,8 +137,8 @@ void fileno_out_delete(int fd)
 __attribute__((__destructor__))
 void stdio_delete(void)
 {
-    fileno_out_delete(STDIN_FILENO);
-    fileno_out_delete(STDOUT_FILENO);
-    fileno_out_delete(STDERR_FILENO);
+    fileno_delete(STDIN_FILENO);
+    fileno_delete(STDOUT_FILENO);
+    fileno_delete(STDERR_FILENO);
 }
 
