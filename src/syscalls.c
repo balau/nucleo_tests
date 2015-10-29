@@ -22,8 +22,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
-
-#include "syscalls.h"
+#include <file.h>
 
 int _fstat(int fd, struct stat *buf);
 int _write (int fd, char *ptr, int len);

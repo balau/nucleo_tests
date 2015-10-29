@@ -19,7 +19,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include "syscalls.h"
+#include <file.h>
 #include "w5100.h"
 
 /******* defines and macros ********/
