@@ -32,78 +32,30 @@ int _close(int fd);
 int _isatty(int fd);
 _off_t _lseek(int fd, _off_t offset, int whence );
 
-
-#define NFILES_MAX 8
-
-static
-struct fd files[NFILES_MAX];
-
-struct fd *syscall_get_file_struct(int fd)
-{
-    struct fd *f;
-
-    if (fd >= NFILES_MAX)
-    {
-        f = NULL;
-    }
-    else
-    {
-        f = &files[fd];
-    }
-    return f;
-}
-
-int syscall_falloc(void)
-{
-    int fd;
-    int ret = -1;
-
-    /* starting from 3 because of STDIN, STDOUT, STDERR */
-    for (fd = 3; fd < NFILES_MAX; fd++)
-    {
-        if (!files[fd].isallocated)
-        {
-            memset(&files[fd], 0, sizeof(files[fd]));
-            
-            files[fd].isallocated = 1;
-            files[fd].fd = fd;
-            ret = fd;
-            break;
-        }
-    }
-    return ret;
-}
-
-void syscall_ffree(int fd)
-{
-    if ((fd < NFILES_MAX) && (fd >= 0) && (files[fd].isallocated))
-    {
-        files[fd].isallocated = 0;
-    }
-}
-
 int _write (int fd, char *ptr, int len)
 {
     int ret;
-
-    if (fd >= NFILES_MAX)
+    struct fd *f;
+    
+    f = syscall_get_file_struct(fd);
+    if (f == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (!files[fd].isopen) /* TODO: check write permission */
+    else if (!f->isopen)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (files[fd].write == NULL)
+    else if (f->write == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
     else
     {
-        ret = files[fd].write(fd, ptr, len);
+        ret = f->write(fd, ptr, len);
     }
     return ret;
 }
@@ -111,25 +63,27 @@ int _write (int fd, char *ptr, int len)
 int _read (int fd, char *ptr, int len)
 {
     int ret;
-
-    if (fd >= NFILES_MAX)
+    struct fd *f;
+    
+    f = syscall_get_file_struct(fd);
+    if (f == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (!files[fd].isopen) /* TODO: check read permission */
+    else if (!f->isopen)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (files[fd].read == NULL)
+    else if (f->read == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
     else
     {
-        ret = files[fd].read(fd, ptr, len);
+        ret = f->read(fd, ptr, len);
     }
     return ret;
 }
@@ -162,25 +116,27 @@ void * _sbrk (ptrdiff_t incr)
 int _close(int fd)
 {
     int ret;
-
-    if (fd >= NFILES_MAX)
+    struct fd *f;
+    
+    f = syscall_get_file_struct(fd);
+    if (f == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (!files[fd].isopen)
+    else if (!f->isopen)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (files[fd].close != NULL)
+    else if (f->close != NULL)
     {
-        ret = files[fd].close(fd);
+        ret = f->close(fd);
     }
     else
     {
         /* TODO */
-        files[fd].isopen = 0;
+        f->isopen = 0;
         ret = 0;
     }
     return ret;
@@ -189,20 +145,22 @@ int _close(int fd)
 int _fstat(int fd, struct stat *buf)
 {
     int ret;
+    struct fd *f;
     
-    if (fd >= NFILES_MAX)
+    f = syscall_get_file_struct(fd);
+    if (f == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (!files[fd].isopen)
+    else if (!f->isopen)
     {
         errno = EBADF;
         ret = -1;
     }
     else
     {
-        *buf = files[fd].stat;
+        *buf = f->stat;
         ret = 0;
     }
     return ret;
@@ -211,18 +169,20 @@ int _fstat(int fd, struct stat *buf)
 int _isatty(int fd)
 {
     int ret;
-
-    if (fd >= NFILES_MAX)
+    struct fd *f;
+    
+    f = syscall_get_file_struct(fd);
+    if (f == NULL)
     {
         errno = EBADF;
-        ret = 0;
+        ret = -1;
     }
-    else if (!files[fd].isopen)
+    else if (!f->isopen)
     {
         errno = EBADF;
-        ret = 0;
+        ret = -1;
     }
-    else if (files[fd].isatty)
+    else if (f->isatty)
     {
         ret = 1;
     }
@@ -237,13 +197,15 @@ int _isatty(int fd)
 _off_t _lseek(int fd, _off_t offset, int whence )
 {
     int ret;
+    struct fd *f;
     
-    if (fd >= NFILES_MAX)
+    f = syscall_get_file_struct(fd);
+    if (f == NULL)
     {
         errno = EBADF;
         ret = -1;
     }
-    else if (!files[fd].isopen)
+    else if (!f->isopen)
     {
         errno = EBADF;
         ret = -1;

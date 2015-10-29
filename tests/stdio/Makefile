@@ -20,6 +20,7 @@
 BINARY = stdio_test
 OBJS += $(ROOT_DIR)/src/stdio_usart.o
 OBJS += $(ROOT_DIR)/src/syscalls.o
+OBJS += $(ROOT_DIR)/src/file.o
 
 include ../test.mk
 

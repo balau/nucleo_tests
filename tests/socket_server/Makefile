@@ -23,6 +23,7 @@ OBJS += $(ROOT_DIR)/src/w5100_spi.o
 OBJS += $(ROOT_DIR)/src/inet.o
 OBJS += $(ROOT_DIR)/src/stdio_usart.o
 OBJS += $(ROOT_DIR)/src/syscalls.o
+OBJS += $(ROOT_DIR)/src/file.o
 LDLIBS_SYS =
 
 include ../test.mk
