@@ -38,10 +38,10 @@ extern
 struct fd *file_struct_get(int fd);
 
 extern
-int syscall_falloc(void);
+int file_alloc(void);
 
 extern
-void syscall_ffree(int fd);
+void file_free(int fd);
 
 #endif
 

@@ -46,7 +46,7 @@ struct fd *file_struct_get(int fd)
     return f;
 }
 
-int syscall_falloc(void)
+int file_alloc(void)
 {
     int fd;
     int ret = -1;
@@ -67,7 +67,7 @@ int syscall_falloc(void)
     return ret;
 }
 
-void syscall_ffree(int fd)
+void file_free(int fd)
 {
     if ((fd < NFILES_MAX) && (fd >= 0) && (files[fd].isallocated))
     {

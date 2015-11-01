@@ -201,7 +201,7 @@ int w5100_sock_close(int fd)
         
         fds = file_struct_get(fd);
         fds->isopen = 0;
-        syscall_ffree(fd);
+        file_free(fd);
         w5100_command(isocket, W5100_CMD_CLOSE);
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
@@ -233,7 +233,7 @@ int tcp_create(void)
     {
         int fd;
         
-        fd = syscall_falloc();
+        fd = file_alloc();
         if (fd == -1)
         {
             isocket = -1;
@@ -447,7 +447,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
             sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
         } while (sr != W5100_SOCK_ESTABLISHED);
 
-        newsockfd = syscall_falloc();
+        newsockfd = file_alloc();
         if (newsockfd == -1)
         {
             errno = ENFILE;
