@@ -35,7 +35,7 @@ struct fd {
 };
 
 extern
-struct fd *syscall_get_file_struct(int fd);
+struct fd *file_struct_get(int fd);
 
 extern
 int syscall_falloc(void);

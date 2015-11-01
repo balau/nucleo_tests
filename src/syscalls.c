@@ -37,7 +37,7 @@ int _write (int fd, char *ptr, int len)
     int ret;
     struct fd *f;
     
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     if (f == NULL)
     {
         errno = EBADF;
@@ -65,7 +65,7 @@ int _read (int fd, char *ptr, int len)
     int ret;
     struct fd *f;
     
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     if (f == NULL)
     {
         errno = EBADF;
@@ -118,7 +118,7 @@ int _close(int fd)
     int ret;
     struct fd *f;
     
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     if (f == NULL)
     {
         errno = EBADF;
@@ -147,7 +147,7 @@ int _fstat(int fd, struct stat *buf)
     int ret;
     struct fd *f;
     
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     if (f == NULL)
     {
         errno = EBADF;
@@ -171,7 +171,7 @@ int _isatty(int fd)
     int ret;
     struct fd *f;
     
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     if (f == NULL)
     {
         errno = EBADF;
@@ -199,7 +199,7 @@ _off_t _lseek(int fd, _off_t offset, int whence )
     int ret;
     struct fd *f;
     
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     if (f == NULL)
     {
         errno = EBADF;

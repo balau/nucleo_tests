@@ -122,7 +122,7 @@ struct fd *fill_fd_struct(int sockfd, int isocket)
 {
     struct fd *fds;
     
-    fds = syscall_get_file_struct(sockfd);
+    fds = file_struct_get(sockfd);
     
     fds->isatty = 0;
     fds->isopen = 1;
@@ -199,7 +199,7 @@ int w5100_sock_close(int fd)
         struct fd *fds;
         uint8_t sr;
         
-        fds = syscall_get_file_struct(fd);
+        fds = file_struct_get(fd);
         fds->isopen = 0;
         syscall_ffree(fd);
         w5100_command(isocket, W5100_CMD_CLOSE);

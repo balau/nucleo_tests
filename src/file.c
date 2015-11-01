@@ -31,7 +31,7 @@
 static
 struct fd files[NFILES_MAX];
 
-struct fd *syscall_get_file_struct(int fd)
+struct fd *file_struct_get(int fd)
 {
     struct fd *f;
 

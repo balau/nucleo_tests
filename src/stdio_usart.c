@@ -36,7 +36,7 @@ int stdio_usart_write(int fd, char *ptr, int len)
     int i;
     struct fd *f;
 
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     /* TODO: non-blocking */
     (void)f;
     for(i = 0; i < len; i++)
@@ -52,7 +52,7 @@ int stdio_usart_read(int fd, char *ptr, int len)
     int nread = 0;
     struct fd *f;
 
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     (void)f;
     if (len > 0)
     {
@@ -95,7 +95,7 @@ void fileno_out_init(int fd)
 {
     struct fd *f;
 
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
 
     f->fd = fd;
     f->stat.st_mode = S_IFCHR|S_IWUSR|S_IWGRP|S_IWOTH;
@@ -108,7 +108,7 @@ static
 void fileno_in_init(int fd)
 {
     struct fd *f;
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
 
     f->fd = fd;
     f->stat.st_mode = S_IFCHR|S_IRUSR|S_IRGRP|S_IROTH;
@@ -130,7 +130,7 @@ static
 void fileno_delete(int fd)
 {
     struct fd *f;
-    f = syscall_get_file_struct(fd);
+    f = file_struct_get(fd);
     f->isopen = 0;
 }
 
