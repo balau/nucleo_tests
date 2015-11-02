@@ -216,40 +216,72 @@ int w5100_sock_read(int fd, char *buf, int len)
 static
 int w5100_sock_close(int fd)
 {
-    int isocket;
     int ret;
+    struct w5100_socket *s;
 
-    isocket = fd_to_isocket(fd);
-    if (isocket == -1)
+    s = get_socket_from_fd(fd);
+    if (s == NULL)
     {
-        errno = EBADF;
         ret = -1;
     }
     else
     {
-        struct fd *fds;
+        int isocket;
         uint8_t sr;
         
-        fds = file_struct_get(fd);
-        fds->isopen = 0;
-        file_free(fd);
-        w5100_command(isocket, W5100_CMD_CLOSE);
-        do {
-            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
-        } while (sr != W5100_SOCK_CLOSED);
-        if (w5100_sockets[isocket].fd == fd)
+        isocket = s->isocket;
+
+        if ((s->fd_data != NULL) && (s->fd_data->fd == fd))
         {
-            socket_free(isocket);
-        }
-        else if (w5100_sockets[isocket].connection_data != NULL)
-        {
-            if (w5100_sockets[isocket].connection_data->stat.st_ino == fd)
+            s->fd_data->isopen = 0;
+            file_free(s->fd_data->fd);
+            s->fd_data = NULL;
+            if (s->state != W5100_SOCK_STATE_ACCEPTED)
             {
+                w5100_command(isocket, W5100_CMD_CLOSE);
+                do {
+                    sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+                } while (sr != W5100_SOCK_CLOSED);
+                socket_free(isocket);
+            }
+            ret = 0;
+        }
+        else if (s->connection_data == NULL)
+        {
+            errno = EBADF;
+            ret = -1;
+        }
+        else if (s->connection_data->fd == fd)
+        {
+            s->connection_data->isopen = 0;
+            file_free(s->connection_data->fd);
+            s->connection_data = NULL;
+            w5100_command(isocket, W5100_CMD_CLOSE);
+            do {
+                sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+            } while (sr != W5100_SOCK_CLOSED);
+            if (s->fd_data == NULL)
+            {
+                /* underlying listening socket has been already closed. */
+                socket_free(isocket);
+            }
+            else
+            {
+                /* re-enter listening state */
                 w5100_command(isocket, W5100_CMD_OPEN);
                 w5100_command(isocket, W5100_CMD_LISTEN);
+                do {
+                    sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+                } while ((sr != W5100_SOCK_LISTEN) && (sr != W5100_SOCK_ESTABLISHED));
+                s->state = W5100_SOCK_STATE_LISTENING;
             }
+            ret = 0;
         }
-        ret = 0;
+        else
+        {
+            errno = EBADF;
+            ret = -1;
+        }
     }
     return ret;
 }
@@ -334,13 +366,11 @@ void w5100_command(int isocket, uint8_t cmd)
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int ret;
-    int isocket;
+    struct w5100_socket *s;
 
-    isocket = fd_to_isocket(sockfd);
-
-    if (isocket == -1)
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
     {
-        errno = EBADF;
         ret = -1;
     }
     else if ( addr->sa_family != AF_INET )
@@ -348,17 +378,41 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         errno = EAFNOSUPPORT;
         ret = -1;
     }
-    else /* TODO: UPD and RAW */
+    else if (s->type != SOCK_STREAM) /* UPD and RAW */
+    {
+        errno = EAFNOSUPPORT;
+        ret = -1;
+    }
+    else if (
+            (s->state == W5100_SOCK_STATE_CONNECTED)
+            ||
+            (s->state == W5100_SOCK_STATE_ACCEPTED)
+            )
+    {
+        errno = EISCONN;
+        ret = -1;
+    }
+    else if (s->state == W5100_SOCK_STATE_LISTENING)
+    {
+        errno = EOPNOTSUPP;
+        ret = -1;
+    }
+    else if (s->state != W5100_SOCK_STATE_CREATED)
+    {
+        errno = EOPNOTSUPP;
+        ret = -1;
+    }
+    else
     {
         struct sockaddr_in *server;
         uint8_t sr;
+        int isocket;
 
         (void)addrlen;
 
+        isocket = s->isocket;
         server = (struct sockaddr_in *)addr;
         /* TODO: check if already in use EADDRINUSE */
-        /* TODO: check ENOTSOCK */
-        /* TODO: check TCP */
         w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port);
         w5100_command(isocket, W5100_CMD_OPEN);
         do {
@@ -373,16 +427,17 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         } while ((sr != W5100_SOCK_CLOSED) && (sr != W5100_SOCK_ESTABLISHED));
         if (sr == W5100_SOCK_ESTABLISHED)
         {
+            s->state = W5100_SOCK_STATE_CONNECTED;
             ret = 0;
         }
         else if (sr == W5100_SOCK_CLOSED)
         {
-            errno = ETIMEDOUT;
+            errno = ECONNREFUSED;
             ret = -1;
         }
         else
         {
-            errno = ETIMEDOUT; /* TODO: better error? */
+            errno = ECONNREFUSED; /* TODO: better error? */
             ret = -1;
         }
     }
