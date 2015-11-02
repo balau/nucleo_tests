@@ -238,7 +238,14 @@ int w5100_sock_close(int fd)
             s->fd_data = NULL;
             if (s->state != W5100_SOCK_STATE_ACCEPTED)
             {
-                w5100_command(isocket, W5100_CMD_CLOSE);
+                if (s->state == W5100_SOCK_STATE_CONNECTED)
+                {
+                    w5100_command(isocket, W5100_CMD_DISCON);
+                }
+                else
+                {
+                    w5100_command(isocket, W5100_CMD_CLOSE);
+                }
                 do {
                     sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
                 } while (sr != W5100_SOCK_CLOSED);
@@ -256,7 +263,7 @@ int w5100_sock_close(int fd)
             s->connection_data->isopen = 0;
             file_free(s->connection_data->fd);
             s->connection_data = NULL;
-            w5100_command(isocket, W5100_CMD_CLOSE);
+            w5100_command(isocket, W5100_CMD_DISCON);
             do {
                 sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
             } while (sr != W5100_SOCK_CLOSED);
