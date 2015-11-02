@@ -67,7 +67,10 @@ int w5100_sock_close(int fd);
 static struct w5100_socket {
     int fd;
     int isocket;
-    //enum w5100_socket_state state; //TODO
+    int domain;
+    int type;
+    int protocol;
+    enum w5100_socket_state state;
     struct fd *fd_data;
     struct fd *connection_data;
 } w5100_sockets[W5100_N_SOCKETS];
@@ -75,22 +78,6 @@ static struct w5100_socket {
 static uint8_t w5100_mac_addr[6] = {0x80, 0x81, 0x82, 0x83, 0x84, 0x85};
 
 /******* function definitions ********/
-
-static
-int isocket_to_fd(int isocket)
-{
-    int fd;
-
-    if (isocket < 0 || isocket >= W5100_N_SOCKETS)
-    {
-        fd = -1;
-    }
-    else
-    {
-        fd = w5100_sockets[isocket].fd;
-    }
-    return fd;
-}
 
 static
 int fd_to_isocket(int fd)
@@ -119,7 +106,23 @@ int fd_to_isocket(int fd)
 }
 
 static
-struct w5100_socket *get_socket(int fd)
+struct w5100_socket *get_socket_from_isocket(int isocket)
+{
+    struct w5100_socket *s;
+    
+    if (isocket < 0 || isocket >= W5100_N_SOCKETS)
+    {
+        s = NULL;
+    }
+    else
+    {
+        s = &w5100_sockets[isocket];
+    }
+    return s;
+}
+
+static
+struct w5100_socket *get_socket_from_fd(int fd)
 {
     struct fd *fds;
     struct w5100_socket *s = NULL;
@@ -254,12 +257,11 @@ static
 int tcp_create(void)
 {
     int isocket;
+    int fd = -1;
 
     isocket = socket_alloc();
     if (isocket != -1)
     {
-        int fd;
-        
         fd = file_alloc();
         if (fd == -1)
         {
@@ -270,12 +272,19 @@ int tcp_create(void)
         else
         {
             struct fd *fds;
+            struct w5100_socket *s;
             
             fds = fill_fd_struct(fd, isocket);
+            s = get_socket_from_isocket(isocket);
 
-            w5100_sockets[isocket].fd = fd;
-            w5100_sockets[isocket].fd_data = fds;
-            w5100_sockets[isocket].connection_data = NULL;
+            s->fd = fd;
+            s->isocket = isocket;
+            s->domain = AF_INET;
+            s->type = SOCK_STREAM;
+            s->protocol = 0;
+            s->state = W5100_SOCK_STATE_CREATED;
+            s->fd_data = fds;
+            s->connection_data = NULL;
             
             w5100_write_sock_reg(W5100_Sn_MR, isocket, W5100_SOCK_MODE_TCP);
         }
@@ -284,39 +293,29 @@ int tcp_create(void)
     {
         errno = ENOMEM;
     }
-    return isocket;
+    return fd;
 }
 
 int socket(int domain, int type, int protocol)
 {
     int ret;
 
-    if (domain == AF_INET)
-    {
-        if (type == SOCK_STREAM)
-        {
-            int isocket;
-            (void)protocol; /* ignored */
-            isocket = tcp_create();
-            if (isocket == -1)
-            {
-                ret = -1;
-            }
-            else
-            {
-                ret = isocket_to_fd(isocket);
-            }
-        }
-        else
-        {
-            errno = EPROTONOSUPPORT;
-            ret = -1;
-        }
-    }
-    else
+    if (domain != AF_INET)
     {
         errno = EAFNOSUPPORT;
         ret = -1;
+    }
+    else if ((type != SOCK_STREAM) || (protocol != 0))
+    {
+        errno = EPROTONOSUPPORT;
+        ret = -1;
+    }
+    else
+    {
+        int fd;
+        
+        fd = tcp_create();
+        ret = fd;
     }
     return ret;
 }
@@ -392,13 +391,11 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int ret;
-    int isocket;
+    struct w5100_socket *s;
 
-    isocket = fd_to_isocket(sockfd);
-
-    if (isocket == -1)
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
     {
-        errno = EBADF;
         ret = -1;
     }
     else if ( addr->sa_family != AF_INET )
@@ -406,7 +403,12 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         errno = EAFNOSUPPORT;
         ret = -1;
     }
-    else /* TODO: UPD and RAW */
+    else if (s->state != W5100_SOCK_STATE_CREATED)
+    {
+        errno = EINVAL;
+        ret = 1;
+    }
+    else if (s->type == SOCK_STREAM)
     {
         struct sockaddr_in *server;
         uint8_t sr;
@@ -415,14 +417,20 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         
         server = (struct sockaddr_in *)addr;
         /* TODO: check if already in use EADDRINUSE */
-        /* TODO: check ENOTSOCK */
         /* TODO: check TCP */
-        w5100_write_sock_regx(W5100_Sn_PORT, isocket, &server->sin_port);
-        w5100_command(isocket, W5100_CMD_OPEN);
+        w5100_write_sock_regx(W5100_Sn_PORT, s->isocket, &server->sin_port);
+        w5100_command(s->isocket, W5100_CMD_OPEN);
         do {
-            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+            sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
         } while (sr != W5100_SOCK_INIT);
+        s->state = W5100_SOCK_STATE_BOUND;
         ret = 0;
+    }
+    else
+    {
+        /* TODO: UPD and RAW */
+        errno = EBADF;
+        ret = -1;
     }
     return ret;
 }
@@ -430,26 +438,35 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 int listen(int sockfd, int backlog)
 {
     int ret;
-    int isocket;
+    struct w5100_socket *s;
 
-    isocket = fd_to_isocket(sockfd);
-
-    if (isocket == -1)
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
     {
-        errno = EBADF;
         ret = -1;
     }
-    else /* TODO: UPD and RAW */
+    else if (s->state != W5100_SOCK_STATE_BOUND)
+    {
+        errno = EINVAL;
+        ret = 1;
+    }
+    else if (s->type == SOCK_STREAM)
     {
         uint8_t sr;
         /* TODO: check if already in use EADDRINUSE */
-        /* TODO: check that backlog is 0 */
-        (void)backlog;
-        w5100_command(isocket, W5100_CMD_LISTEN);
+        (void)backlog; /* ignoring the hint because we can't do anything about it. */
+        w5100_command(s->isocket, W5100_CMD_LISTEN);
         do {
-            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+            sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
         } while ((sr != W5100_SOCK_LISTEN) && (sr != W5100_SOCK_ESTABLISHED));
+        s->state = W5100_SOCK_STATE_LISTENING;
         ret = 0;
+    }
+    else
+    {
+        /* TODO: UPD and RAW */
+        errno = EBADF;
+        ret = -1;
     }
     return ret;
 }
