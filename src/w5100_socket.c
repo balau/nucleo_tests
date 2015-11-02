@@ -198,6 +198,7 @@ void socket_free(int isocket)
     w5100_sockets[isocket].fd = W5100_SOCKET_FREE;
     w5100_sockets[isocket].fd_data = NULL;
     w5100_sockets[isocket].connection_data = NULL;
+    w5100_sockets[isocket].state = W5100_SOCK_STATE_NONE;
 }
 
 static
@@ -573,15 +574,23 @@ uint16_t get_rx_base(int isocket)
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
-    int isocket;
     ssize_t ret;
+    struct w5100_socket *s;
 
     (void)flags; /* TODO */
 
-    isocket = fd_to_isocket(sockfd);
-    if (isocket == -1)
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
     {
-        errno = EBADF;
+        ret = -1;
+    }
+    else if (
+            (s->state != W5100_SOCK_STATE_ACCEPTED)
+            &&
+            (s->state != W5100_SOCK_STATE_CONNECTED)
+            )
+    {
+        errno = ENOTCONN;
         ret = 1;
     }
     else if (len == 0)
@@ -591,7 +600,9 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
     else
     {
         uint16_t toread;
+        int isocket;
 
+        isocket = s->isocket;
         do
         {
             w5100_read_sock_regx(W5100_Sn_RX_RSR, isocket, &toread);
@@ -644,19 +655,33 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags)
 {
-    int isocket;
     ssize_t ret;
+    struct w5100_socket *s;
 
     (void)flags; /* TODO */
 
-    isocket = fd_to_isocket(sockfd);
-    if (isocket == -1)
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
     {
-        errno = EBADF;
+        ret = -1;
+    }
+    else if (s->type != SOCK_STREAM) /* UDP or RAW */
+    {
+        errno = EDESTADDRREQ;
+        ret = -1;
+    }
+    else if (
+            (s->state != W5100_SOCK_STATE_ACCEPTED)
+            &&
+            (s->state != W5100_SOCK_STATE_CONNECTED)
+            )
+    {
+        errno = ENOTCONN;
         ret = 1;
     }
     else
     {
+        int isocket;
         uint16_t nfree;
         uint16_t pwrite;
         uint16_t offset;
@@ -666,7 +691,8 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
         uint16_t towrite2;
         uint16_t newwr;
         const uint8_t *bytes = buf;
-
+        
+        isocket = s->isocket;
         w5100_read_sock_regx(W5100_Sn_TX_FSR, isocket, &nfree);
         nfree = ntohs(nfree);
         w5100_read_sock_regx(W5100_Sn_TX_WR, isocket, &pwrite);
@@ -723,7 +749,7 @@ void w5100_socket_init(void)
     
     for (i = 0; i < W5100_N_SOCKETS; i++)
     {
-        w5100_sockets[i].fd = W5100_SOCKET_FREE;
+        socket_free(i);
     }
     w5100_write_reg(W5100_RMSR, 0x55); /* 2KiB per socket */
     w5100_write_reg(W5100_TMSR, 0x55); /* 2KiB per socket */
