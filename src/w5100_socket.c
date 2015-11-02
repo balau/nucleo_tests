@@ -66,6 +66,7 @@ int w5100_sock_close(int fd);
 
 static struct w5100_socket {
     int fd;
+    int isocket;
     //enum w5100_socket_state state; //TODO
     struct fd *fd_data;
     struct fd *connection_data;
@@ -115,6 +116,32 @@ int fd_to_isocket(int fd)
         isocket = -1;
     }
     return isocket;
+}
+
+static
+struct w5100_socket *get_socket(int fd)
+{
+    struct fd *fds;
+    struct w5100_socket *s = NULL;
+    
+    fds = file_struct_get(fd);
+    if (fds == NULL)
+    {
+        errno = EBADF;
+    }
+    else if (!S_ISSOCK(fds->stat.st_mode))
+    {
+        errno = ENOTSOCK;
+    }
+    else if (fds->opaque == NULL)
+    {
+        errno = EBADF;
+    }
+    else
+    {
+        s = fds->opaque;
+    }
+    return s;
 }
 
 static
@@ -236,6 +263,7 @@ int tcp_create(void)
         fd = file_alloc();
         if (fd == -1)
         {
+            socket_free(isocket);
             isocket = -1;
             errno = ENFILE;
         }
