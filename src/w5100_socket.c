@@ -447,10 +447,15 @@ int listen(int sockfd, int backlog)
     }
     else if (s->state != W5100_SOCK_STATE_BOUND)
     {
-        errno = EINVAL;
+        errno = EDESTADDRREQ;
         ret = 1;
     }
-    else if (s->type == SOCK_STREAM)
+    else if (s->type != SOCK_STREAM) /* UPD and RAW */
+    {
+        errno = EOPNOTSUPP;
+        ret = -1;
+    }
+    else /* TCP */
     {
         uint8_t sr;
         /* TODO: check if already in use EADDRINUSE */
@@ -462,34 +467,36 @@ int listen(int sockfd, int backlog)
         s->state = W5100_SOCK_STATE_LISTENING;
         ret = 0;
     }
-    else
-    {
-        /* TODO: UPD and RAW */
-        errno = EBADF;
-        ret = -1;
-    }
     return ret;
 }
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     int ret;
-    int isocket;
+    struct w5100_socket *s;
 
-    isocket = fd_to_isocket(sockfd);
-
-    if (isocket == -1)
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
     {
-        errno = EBADF;
         ret = -1;
     }
-    else /* TODO: UPD and RAW */
+    else if (s->state != W5100_SOCK_STATE_LISTENING)
+    {
+        errno = EINVAL;
+        ret = 1;
+    }
+    else if (s->type != SOCK_STREAM) /* UDP or RAW */
+    {
+        errno = EOPNOTSUPP;
+        ret = -1;
+    }
+    else /* TCP */
     {
         uint8_t sr;
         int newsockfd;
 
         do {
-            sr = w5100_read_sock_reg(W5100_Sn_SR, isocket);
+            sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
         } while (sr != W5100_SOCK_ESTABLISHED);
 
         newsockfd = file_alloc();
@@ -497,18 +504,15 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
         {
             errno = ENFILE;
             /* go again into listen state */
-            w5100_command(isocket, W5100_CMD_CLOSE);
-            w5100_command(isocket, W5100_CMD_OPEN);
-            w5100_command(isocket, W5100_CMD_LISTEN);
+            w5100_command(s->isocket, W5100_CMD_CLOSE);
+            w5100_command(s->isocket, W5100_CMD_OPEN);
+            w5100_command(s->isocket, W5100_CMD_LISTEN);
         }
         else
         {
             struct sockaddr_in *client;
-            struct fd *fds;
-            
-            fds = fill_fd_struct(newsockfd, isocket);
-
-            w5100_sockets[isocket].connection_data = fds;
+            s->state = W5100_SOCK_STATE_ACCEPTED;
+            s->connection_data = fill_fd_struct(newsockfd, s->isocket);
             
             if (addr != NULL)
             {
@@ -519,8 +523,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
                 client = (struct sockaddr_in *)addr;
                 addr->sa_family = AF_INET;
                 
-                w5100_read_sock_regx(W5100_Sn_DIPR, isocket, &client->sin_addr.s_addr);
-                w5100_read_sock_regx(W5100_Sn_DPORT, isocket, &client->sin_port);
+                w5100_read_sock_regx(W5100_Sn_DIPR, s->isocket, &client->sin_addr.s_addr);
+                w5100_read_sock_regx(W5100_Sn_DPORT, s->isocket, &client->sin_port);
             }
 
         }
