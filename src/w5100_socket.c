@@ -795,6 +795,33 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     return ret;
 }
 
+ssize_t sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *addr,
+        socklen_t addrlen)
+{
+    ssize_t ret;
+    struct w5100_socket *s;
+
+    (void)flags; /* TODO */
+
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
+    {
+        ret = -1;
+    }
+    else if (s->type == SOCK_STREAM)
+    {
+        (void)addr; /* ignore */
+        (void)addrlen; /* ignore */
+        ret = send(sockfd, buf, len, flags);
+    }
+    else /* TODO: UDP or RAW */
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    return ret;
+}
+
 __attribute__((__constructor__))
 void w5100_socket_init(void)
 {
