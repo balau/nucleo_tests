@@ -43,6 +43,7 @@ enum w5100_socket_state {
     W5100_SOCK_STATE_BOUND,
     W5100_SOCK_STATE_LISTENING,
     W5100_SOCK_STATE_ACCEPTED,
+    W5100_SOCK_STATE_DISCONNECTED,
 };
 
 /******* function prototypes ********/
@@ -634,6 +635,55 @@ uint16_t get_rx_base(int isocket)
     return W5100_RX_MEM_BASE + get_rx_size(isocket) * isocket;
 }
 
+static
+int manage_disconnect(struct w5100_socket *s)
+{
+    int ret;
+    uint8_t sr;
+    
+    sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+    if (sr != W5100_SOCK_ESTABLISHED)
+    {
+        if (sr == W5100_SOCK_CLOSE_WAIT)
+        {
+            errno = ECONNRESET;
+        }
+        else
+        {
+            errno = ETIMEDOUT;
+        }
+        w5100_command(s->isocket, W5100_CMD_DISCON);
+        do
+        {
+            sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+        } while(sr != W5100_SOCK_CLOSED);
+        if (
+                (s->state == W5100_SOCK_STATE_ACCEPTED)
+                &&
+                (s->fd_data != NULL)
+           )
+        {
+            /* re-enter listening state */
+            w5100_command(s->isocket, W5100_CMD_OPEN);
+            w5100_command(s->isocket, W5100_CMD_LISTEN);
+            do {
+                sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+            } while ((sr != W5100_SOCK_LISTEN) && (sr != W5100_SOCK_ESTABLISHED));
+            s->state = W5100_SOCK_STATE_LISTENING;
+        }
+        else
+        {
+            s->state = W5100_SOCK_STATE_DISCONNECTED;
+        }
+        ret = -1;
+    }
+    else
+    {
+        ret = 0;
+    }
+    return ret;
+}
+
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
     ssize_t ret;
@@ -708,9 +758,15 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
                 newrd = htons(pread + toread);
                 w5100_write_sock_regx(W5100_Sn_RX_RD, isocket, &newrd);
                 w5100_command(isocket, W5100_CMD_RECV);
+                ret = toread;
+                break;
             }
-        } while(toread == 0);
-        ret = toread;
+            else if (manage_disconnect(s) == -1)
+            {
+                ret = -1;
+                break;
+            }
+        } while(1);
     }
     return ret;
 }
@@ -765,6 +821,10 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     {
         errno = ENOTCONN;
         ret = 1;
+    }
+    else if (manage_disconnect(s) == -1)
+    {
+        ret = -1;
     }
     else
     {
