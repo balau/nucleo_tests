@@ -763,6 +763,7 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
             }
             else if (manage_disconnect(s) == -1)
             {
+                /* TODO: return 0 on orderly shutdown */
                 ret = -1;
                 break;
             }

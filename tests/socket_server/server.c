@@ -38,6 +38,7 @@ int loop(void)
     {
         //print the error message
         perror("bind failed.");
+        close(socket_desc);
         return 1;
     }
     puts("bind done");
@@ -47,38 +48,45 @@ int loop(void)
     {
         //print the error message
         perror("listen failed.");
+        close(socket_desc);
         return 1;
     }
-     
-    //Accept and incoming connection
-    puts("Waiting for incoming connections...");
-    c = sizeof(struct sockaddr_in);
-     
-    //accept connection from an incoming client
-    client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c);
-    if (client_sock < 0)
-    {
-        perror("accept failed.");
-        return 1;
-    }
-    puts("Connection accepted");
-     
-    //Receive a message from client
-    while( (read_size = recv(client_sock , client_message , 2000 , 0)) > 0 )
-    {
-        printf("recv: %s\n", client_message);
-        //Send the message back to client
-        write(client_sock , client_message , strlen(client_message)+1);
-    }
-     
-    if(read_size == 0)
-    {
-        puts("Client disconnected");
-        fflush(stdout);
-    }
-    else if(read_size == -1)
-    {
-        perror("recv failed");
+    
+    while(1)
+    { 
+        //Accept and incoming connection
+        puts("Waiting for incoming connections...");
+        c = sizeof(struct sockaddr_in);
+         
+        //accept connection from an incoming client
+        client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c);
+        if (client_sock < 0)
+        {
+            perror("accept failed.");
+            close(socket_desc);
+            return 1;
+        }
+        puts("Connection accepted");
+         
+        //Receive a message from client
+        while( (read_size = recv(client_sock , client_message , 2000 , 0)) > 0 )
+        {
+            printf("recv: %s\n", client_message);
+            //Send the message back to client
+            write(client_sock , client_message , strlen(client_message)+1);
+        }
+         
+        if(read_size == 0)
+        {
+            puts("Client disconnected");
+            fflush(stdout);
+            close(client_sock);
+        }
+        else if(read_size == -1)
+        {
+            perror("recv failed");
+            close(client_sock);
+        }
     }
      
     return 0;
