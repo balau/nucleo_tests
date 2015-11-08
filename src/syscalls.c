@@ -31,6 +31,8 @@ void * _sbrk (ptrdiff_t incr);
 int _close(int fd);
 int _isatty(int fd);
 _off_t _lseek(int fd, _off_t offset, int whence );
+pid_t _getpid(void);
+int _kill(pid_t pid, int sig);
 
 int _write (int fd, char *ptr, int len)
 {
@@ -219,5 +221,28 @@ _off_t _lseek(int fd, _off_t offset, int whence )
         ret = -1;
     }
     return ret;
+}
+
+void _exit(int code)
+{
+    (void)code;
+    while(1)
+    {
+        continue; /* infinite loop */
+    }
+}
+
+pid_t _getpid(void)
+{
+    return 1;
+}
+
+int _kill(pid_t pid, int sig)
+{
+    /* do nothing */
+    (void)pid;
+    (void)sig;
+    errno = EPERM;
+    return -1;
 }
 
