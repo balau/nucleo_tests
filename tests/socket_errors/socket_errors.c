@@ -17,9 +17,13 @@
 #  define SERVER_PORT 8888
 #endif
 
+int assertions_failed = 0;
+
 #define assert_equal(x, y) do { \
-        if (x != y) { fprintf(stderr, "%d != %d\n", x, y); } \
-        assert(x == y); \
+        if (x != y) { \
+            fprintf(stderr, "%s:%d: %s: " #x " != " #y ": %d != %d\n", __FILE__, __LINE__, __func__, x, y); \
+            assertions_failed++; \
+        }\
     } while(0);
 
 int main(void)
@@ -40,7 +44,7 @@ int main(void)
     errno = 0;
     sock = socket(AF_INET , 0xFFFF , 0);
     assert_equal(sock, -1);
-    assert_equal(errno, EINVAL);
+    assert_equal(errno, EPROTOTYPE);
 
     errno = 0;
     sock = socket(AF_INET , SOCK_STREAM , 0);
@@ -98,7 +102,15 @@ int main(void)
     assert_equal(ret, -1);
     assert_equal(errno, EBADF);
 
-    puts("All tests OK");
-    return 0;
+    if (assertions_failed)
+    {
+        printf("%d assertions failed.\n", assertions_failed);
+        return 1;
+    }
+    else
+    {
+        puts("All tests OK");
+        return 0;
+    }
 }
 
