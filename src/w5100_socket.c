@@ -295,7 +295,7 @@ int w5100_sock_close(int fd)
 }
 
 static
-int tcp_create(void)
+int socket_create(int type)
 {
     int isocket;
     int fd = -1;
@@ -314,6 +314,7 @@ int tcp_create(void)
         {
             struct fd *fds;
             struct w5100_socket *s;
+            uint8_t sock_mode;
             
             fds = fill_fd_struct(fd, isocket);
             s = get_socket_from_isocket(isocket);
@@ -321,13 +322,29 @@ int tcp_create(void)
             s->fd = fd;
             s->isocket = isocket;
             s->domain = AF_INET;
-            s->type = SOCK_STREAM;
+            s->type = type;
             s->protocol = 0;
             s->state = W5100_SOCK_STATE_CREATED;
             s->fd_data = fds;
             s->connection_data = NULL;
             
-            w5100_write_sock_reg(W5100_Sn_MR, isocket, W5100_SOCK_MODE_TCP);
+            switch(type)
+            {
+                case SOCK_STREAM:
+                    sock_mode = W5100_SOCK_MODE_TCP;
+                    break;
+                case SOCK_DGRAM:
+                    sock_mode = W5100_SOCK_MODE_UDP;
+                    break;
+                case SOCK_RAW:
+                    sock_mode = W5100_SOCK_MODE_IPRAW;
+                    break;
+                default:
+                    /* should never arrive here. */
+                    sock_mode = W5100_SOCK_MODE_TCP;
+                    break;
+            }
+            w5100_write_sock_reg(W5100_Sn_MR, isocket, sock_mode);
         }
     }
     else
@@ -346,7 +363,12 @@ int socket(int domain, int type, int protocol)
         errno = EAFNOSUPPORT;
         ret = -1;
     }
-    else if ((type != SOCK_STREAM) || (protocol != 0))
+    else if ((type != SOCK_STREAM) && (type != SOCK_DGRAM) && (type != SOCK_RAW))
+    {
+        errno = EPROTOTYPE;
+        ret = -1;
+    }
+    else if (protocol != 0)
     {
         errno = EPROTONOSUPPORT;
         ret = -1;
@@ -355,7 +377,7 @@ int socket(int domain, int type, int protocol)
     {
         int fd;
         
-        fd = tcp_create();
+        fd = socket_create(type);
         ret = fd;
     }
     return ret;
