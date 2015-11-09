@@ -791,9 +791,22 @@ ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
         ret = -1;
     }
     else if (
+            (s->type == SOCK_STREAM)
+            &&
             (s->state != W5100_SOCK_STATE_ACCEPTED)
             &&
             (s->state != W5100_SOCK_STATE_CONNECTED)
+            )
+    {
+        errno = ENOTCONN;
+        ret = 1;
+    }
+    else if (
+            (s->type == SOCK_DGRAM)
+            &&
+            (s->state != W5100_SOCK_STATE_BOUND)
+            &&
+            (s->state != W5100_SOCK_STATE_CREATED)
             )
     {
         errno = ENOTCONN;
