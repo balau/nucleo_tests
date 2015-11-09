@@ -494,27 +494,35 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         errno = EINVAL;
         ret = 1;
     }
-    else if (s->type == SOCK_STREAM)
+    else if ((s->type == SOCK_STREAM) || (s->type == SOCK_DGRAM))
     {
         struct sockaddr_in *server;
         uint8_t sr;
+        uint8_t sr_end;
 
         (void)addrlen;
         
         server = (struct sockaddr_in *)addr;
         /* TODO: check if already in use EADDRINUSE */
-        /* TODO: check TCP */
         w5100_write_sock_regx(W5100_Sn_PORT, s->isocket, &server->sin_port);
         w5100_command(s->isocket, W5100_CMD_OPEN);
+        if (s->type == SOCK_STREAM)
+        {
+            sr_end = W5100_SOCK_INIT;
+        }
+        else
+        {
+            sr_end = W5100_SOCK_UDP;
+        }
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
-        } while (sr != W5100_SOCK_INIT);
+        } while (sr != sr_end);
         s->state = W5100_SOCK_STATE_BOUND;
         ret = 0;
     }
     else
     {
-        /* TODO: UPD and RAW */
+        /* TODO: RAW */
         errno = EBADF;
         ret = -1;
     }
