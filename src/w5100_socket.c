@@ -81,32 +81,6 @@ static uint8_t w5100_mac_addr[6] = {0x80, 0x81, 0x82, 0x83, 0x84, 0x85};
 /******* function definitions ********/
 
 static
-int fd_to_isocket(int fd)
-{
-    int isocket;
-
-    for (isocket = 0; isocket < W5100_N_SOCKETS; isocket++)
-    {
-        if (fd == w5100_sockets[isocket].fd)
-        {
-            break;
-        }
-        if (w5100_sockets[isocket].connection_data != NULL)
-        {
-            if (w5100_sockets[isocket].connection_data->fd == fd)
-            {
-                break;
-            }
-        }
-    }
-    if (isocket >= W5100_N_SOCKETS)
-    {
-        isocket = -1;
-    }
-    return isocket;
-}
-
-static
 struct w5100_socket *get_socket_from_isocket(int isocket)
 {
     struct w5100_socket *s;
