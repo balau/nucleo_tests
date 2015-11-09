@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <file.h>
+#include <string.h>
 #include "w5100.h"
 
 /******* defines and macros ********/
@@ -693,6 +694,89 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
     return recvfrom(sockfd, buf, len, flags, NULL, NULL);
 }
 
+static
+uint16_t read_buf_len(int isocket)
+{
+    uint16_t toread;
+
+    w5100_read_sock_regx(W5100_Sn_RX_RSR, isocket, &toread);
+    toread = ntohs(toread);
+
+    return toread;
+}
+
+static
+void read_buf_sure(int isocket, void *buf, size_t len, uint16_t *pread)
+{
+    uint16_t offset;
+    uint16_t phys;
+    uint16_t toread1;
+    uint16_t toread2;
+    uint8_t *bytes = buf;
+
+    offset = *pread & get_rx_mask(isocket);
+    phys = get_rx_base(isocket) + offset;
+    if (offset + len > get_rx_size(isocket))
+    {
+        toread1 = get_rx_size(isocket) - offset;
+        toread2 = len - toread1;
+    }
+    else
+    {
+        toread1 = len;
+        toread2 = 0;
+    }
+    if (toread1 > 0)
+    {
+        w5100_read_mem(phys, &bytes[0], toread1);
+    }
+    if (toread2 > 0)
+    {
+        w5100_read_mem(get_rx_base(isocket), &bytes[toread1], toread2);
+    }
+    *pread = *pread + len;
+}
+
+static
+uint16_t read_buf_pstart(int isocket)
+{
+    uint16_t pread;
+
+    w5100_read_sock_regx(W5100_Sn_RX_RD, isocket, &pread);
+    pread = ntohs(pread);
+
+    return pread;
+}
+
+static
+void read_buf_recv(int isocket, uint16_t pstop)
+{
+    pstop = htons(pstop);
+    w5100_write_sock_regx(W5100_Sn_RX_RD, isocket, &pstop);
+    w5100_command(isocket, W5100_CMD_RECV);
+}
+
+static
+uint16_t read_buf(int isocket, void *buf, size_t len)
+{
+    uint16_t toread;
+
+    toread = read_buf_len(isocket);
+    if (toread != 0)
+    {
+        uint16_t pread;
+        
+        if (len > toread)
+        {
+            len = toread;
+        }
+        pread = read_buf_pstart(isocket);
+        read_buf_sure(isocket, buf, len, &pread);
+        read_buf_recv(isocket, pread);
+    }
+    return toread;
+}
+
 ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
         struct sockaddr *__restrict address, socklen_t *__restrict address_len)
 {
@@ -721,63 +805,58 @@ ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
     }
     else
     {
-        uint16_t toread;
-        int isocket;
-
-        isocket = s->isocket;
         do
         {
-            w5100_read_sock_regx(W5100_Sn_RX_RSR, isocket, &toread);
-            toread = ntohs(toread);
-            if (toread != 0)
+            if (s->type == SOCK_STREAM)
             {
-                uint16_t pread;
-                uint16_t offset;
-                uint16_t phys;
-                uint16_t toread1;
-                uint16_t toread2;
-                uint16_t newrd;
-                uint8_t *bytes = buf;
+                uint16_t nread;
 
-                if (len < toread)
+                nread = read_buf(s->isocket, buf, len);
+                if (nread != 0)
                 {
-                    toread = len;
+                    (void)address; /* TODO: fill */
+                    (void)address_len; /* TODO: fill */
+                    ret = nread;
+                    break;
                 }
-                w5100_read_sock_regx(W5100_Sn_RX_RD, isocket, &pread);
-                pread = ntohs(pread);
-                offset = pread & get_rx_mask(isocket);
-                phys = get_rx_base(isocket) + offset;
-                if (offset + toread > get_rx_size(isocket))
+                else if (manage_disconnect(s) == -1)
                 {
-                    toread1 = get_rx_size(isocket) - offset;
-                    toread2 = toread - toread1;
+                    /* TODO: return 0 on orderly shutdown */
+                    ret = -1;
+                    break;
                 }
-                else
-                {
-                    toread1 = toread;
-                    toread2 = 0;
-                }
-                if (toread1 > 0)
-                {
-                    w5100_read_mem(phys, &bytes[0], toread1);
-                }
-                if (toread2 > 0)
-                {
-                    w5100_read_mem(get_rx_base(isocket), &bytes[toread1], toread2);
-                }
-                newrd = htons(pread + toread);
-                w5100_write_sock_regx(W5100_Sn_RX_RD, isocket, &newrd);
-                w5100_command(isocket, W5100_CMD_RECV);
-                (void)address; /* TODO: fill */
-                (void)address_len; /* TODO: fill */
-                ret = toread;
-                break;
             }
-            else if (manage_disconnect(s) == -1)
+            else if (s->type == SOCK_DGRAM)
             {
-                /* TODO: return 0 on orderly shutdown */
-                ret = -1;
-                break;
+                uint16_t toread;
+                uint8_t header[8];
+
+                toread = read_buf_len(s->isocket);
+
+                if (toread >= sizeof(header))
+                {
+                    uint16_t pread;
+                    uint16_t msg_len;
+
+                    pread = read_buf_pstart(s->isocket);
+                    read_buf_sure(s->isocket, header, sizeof(header), &pread);
+                    if ((address != NULL) && (address_len != NULL))
+                    {
+                        struct sockaddr_in *peer;
+                        /* TODO: check address_len in input and truncate in case */
+                        
+                        peer = (struct sockaddr_in *)address;
+                        memcpy(&peer->sin_addr.s_addr, &header[0], 4);
+                        memcpy(&peer->sin_port, &header[4], 2);
+                        *address_len = sizeof(struct sockaddr_in);
+                    }
+                    memcpy(&msg_len, &header[6], 2);
+                    msg_len = ntohs(msg_len);
+                    read_buf_sure(s->isocket, buf, msg_len, &pread);
+                    read_buf_recv(s->isocket, pread);
+                    ret = msg_len;
+                    break;
+                }
             }
         } while(1);
     }
