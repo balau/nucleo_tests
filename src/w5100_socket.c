@@ -690,6 +690,12 @@ int manage_disconnect(struct w5100_socket *s)
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags)
 {
+    return recvfrom(sockfd, buf, len, flags, NULL, NULL);
+}
+
+ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
+        struct sockaddr *__restrict address, socklen_t *__restrict address_len)
+{
     ssize_t ret;
     struct w5100_socket *s;
 
@@ -762,6 +768,8 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
                 newrd = htons(pread + toread);
                 w5100_write_sock_regx(W5100_Sn_RX_RD, isocket, &newrd);
                 w5100_command(isocket, W5100_CMD_RECV);
+                (void)address; /* TODO: fill */
+                (void)address_len; /* TODO: fill */
                 ret = toread;
                 break;
             }
@@ -772,31 +780,6 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags)
                 break;
             }
         } while(1);
-    }
-    return ret;
-}
-
-ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
-        struct sockaddr *__restrict address, socklen_t *__restrict address_len)
-{
-    ssize_t ret;
-    struct w5100_socket *s;
-
-    s = get_socket_from_fd(sockfd);
-    if (s == NULL)
-    {
-        ret = -1;
-    }
-    else if (s->type == SOCK_STREAM)
-    {
-        ret = recv(sockfd, buf, len, flags);
-        (void)address; /* TODO: fill */
-        (void)address_len; /* TODO: fill */
-    }
-    else /* TODO: UDP or RAW */
-    {
-        errno = EBADF;
-        ret = -1;
     }
     return ret;
 }
