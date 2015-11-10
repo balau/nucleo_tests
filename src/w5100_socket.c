@@ -143,6 +143,39 @@ struct fd *fill_fd_struct(int sockfd, int isocket)
 }
 
 static
+uint16_t get_avail_port(void)
+{
+    uint16_t avail_port;
+    int port_used;
+
+    avail_port = htons(0x7FF0);
+    do 
+    {
+        int isocket;
+
+        port_used = 0;
+
+        for (isocket = 0; isocket < W5100_N_SOCKETS; isocket++)
+        {
+            if (get_socket_from_isocket(isocket)->state != W5100_SOCK_STATE_NONE)
+            {
+                uint16_t port;
+
+                w5100_read_sock_regx(W5100_Sn_PORT, isocket, &port);
+                if (port == avail_port)
+                {
+                    port_used = 1;
+                    avail_port--;
+                    break;
+                }
+            }
+        }
+    } while(port_used);
+    
+    return avail_port;
+}
+
+static
 int socket_alloc(void)
 {
     int i;
@@ -836,7 +869,7 @@ void write_buf_sure(int isocket, const void *buf, size_t len, uint16_t *pwrite)
     {
         w5100_write_mem(get_tx_base(isocket), &bytes[towrite1], towrite2);
     }
-    pwrite += len;
+    *pwrite += len;
 }
 
 static
@@ -1015,10 +1048,44 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
     }
     else if (s->type == SOCK_DGRAM)
     {
-        /* TODO: check address NULL and check if connect */
-        /* TODO: UDP */
-        errno = EBADF;
-        ret = -1;
+        if (s->state == W5100_SOCK_STATE_CREATED)
+        {
+            uint16_t port;
+
+            port = get_avail_port();
+
+            w5100_write_sock_regx(W5100_Sn_PORT, s->isocket, &port);
+            w5100_command(s->isocket, W5100_CMD_OPEN);
+            s->state = W5100_SOCK_STATE_BOUND;
+        }
+
+        if (len > get_tx_size(s->isocket))
+        {
+            errno = EMSGSIZE;
+            ret = -1;
+        }
+        else if (dest_address == NULL)
+        {
+            errno = EDESTADDRREQ;
+            ret = -1;
+        }
+        else
+        {
+            do
+            {
+                if (write_buf_len(s->isocket) >= len)
+                {
+                    const struct sockaddr_in *peer;
+
+                    peer = (struct sockaddr_in *)dest_address;
+                    w5100_write_sock_regx(W5100_Sn_DIPR, s->isocket, &peer->sin_addr.s_addr);
+                    w5100_write_sock_regx(W5100_Sn_DPORT, s->isocket, &peer->sin_port);
+
+                    ret = write_buf(s->isocket, buf, len);
+                    break;
+                }
+            } while(1); /* TODO: non blocking */
+        }
     }
     else /* TODO: RAW */
     {
