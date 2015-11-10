@@ -73,6 +73,7 @@ static struct w5100_socket {
     int type;
     int protocol;
     enum w5100_socket_state state;
+    struct sockaddr_in dest_address;
     struct fd *fd_data;
     struct fd *connection_data;
 } w5100_sockets[W5100_N_SOCKETS];
@@ -333,6 +334,7 @@ int socket_create(int type)
             s->type = type;
             s->protocol = 0;
             s->state = W5100_SOCK_STATE_CREATED;
+            s->dest_address.sin_family = AF_UNSPEC;
             s->fd_data = fds;
             s->connection_data = NULL;
             
@@ -401,22 +403,37 @@ void w5100_command(int isocket, uint8_t cmd)
     }
 }
 
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+static
+void bind_udp(struct w5100_socket *s, uint16_t port)
+{
+    uint8_t sr;
+
+    w5100_write_sock_regx(W5100_Sn_PORT, s->isocket, &port);
+    w5100_command(s->isocket, W5100_CMD_OPEN);
+    do {
+        sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+    } while (sr != W5100_SOCK_UDP);
+    s->state = W5100_SOCK_STATE_BOUND;
+}
+
+static
+void check_bind_udp(struct w5100_socket *s)
+{
+    if (s->state == W5100_SOCK_STATE_CREATED)
+    {
+        uint16_t port;
+
+        port = get_avail_port();
+        bind_udp(s, port);
+    }
+}
+
+static
+int connect_tcp(struct w5100_socket *s, const struct sockaddr *addr, socklen_t addrlen)
 {
     int ret;
-    struct w5100_socket *s;
-
-    s = get_socket_from_fd(sockfd);
-    if (s == NULL)
-    {
-        ret = -1;
-    }
-    else if ( addr->sa_family != AF_INET )
-    {
-        errno = EAFNOSUPPORT;
-        ret = -1;
-    }
-    else if (s->type != SOCK_STREAM) /* UPD and RAW */
+    
+    if ( addr->sa_family != AF_INET )
     {
         errno = EAFNOSUPPORT;
         ret = -1;
@@ -482,6 +499,63 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     return ret;
 }
 
+static
+int connect_udp(struct w5100_socket *s, const struct sockaddr *addr, socklen_t addrlen)
+{
+    int ret;
+    
+    (void)addrlen;
+
+    if (addr->sa_family == AF_UNSPEC)
+    {
+        s->dest_address.sin_family = AF_UNSPEC; /* reset pre-specified address */
+        check_bind_udp(s);
+        ret = 0;
+    }
+    else if (addr->sa_family == AF_INET)
+    {
+        const struct sockaddr_in *dest_address;
+        
+        dest_address = (struct sockaddr_in *)addr;
+        s->dest_address = *dest_address;
+        check_bind_udp(s);
+        ret = 0;
+    }
+    else
+    {
+        errno = EAFNOSUPPORT;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    int ret;
+    struct w5100_socket *s;
+
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
+    {
+        ret = -1;
+    }
+    else if (s->type == SOCK_STREAM)
+    {
+        ret = connect_tcp(s, addr, addrlen);
+    }
+    else if (s->type == SOCK_DGRAM)
+    {
+        ret = connect_udp(s, addr, addrlen);
+    }
+    else /* TODO: RAW */
+    {
+        errno = EAFNOSUPPORT;
+        ret = -1;
+    }
+    return ret;
+}
+
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     int ret;
@@ -502,7 +576,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         errno = EINVAL;
         ret = 1;
     }
-    else if ((s->type == SOCK_STREAM) || (s->type == SOCK_DGRAM))
+    else if (s->type == SOCK_STREAM)
     {
         struct sockaddr_in *server;
         uint8_t sr;
@@ -514,18 +588,20 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         /* TODO: check if already in use EADDRINUSE */
         w5100_write_sock_regx(W5100_Sn_PORT, s->isocket, &server->sin_port);
         w5100_command(s->isocket, W5100_CMD_OPEN);
-        if (s->type == SOCK_STREAM)
-        {
-            sr_end = W5100_SOCK_INIT;
-        }
-        else
-        {
-            sr_end = W5100_SOCK_UDP;
-        }
+        sr_end = W5100_SOCK_INIT;
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
         } while (sr != sr_end);
         s->state = W5100_SOCK_STATE_BOUND;
+        ret = 0;
+    }
+    else if (s->type == SOCK_DGRAM)
+    {
+        struct sockaddr_in *server;
+        (void)addrlen;
+
+        server = (struct sockaddr_in *)addr;
+        bind_udp(s, server->sin_port);
         ret = 0;
     }
     else
@@ -1004,7 +1080,19 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     {
         ret = -1;
     }
-    else if (s->type != SOCK_STREAM) /* UDP or RAW */
+    else if (s->type == SOCK_DGRAM)
+    {
+        if (s->dest_address.sin_family == AF_UNSPEC)
+        {
+            errno = EDESTADDRREQ;
+            ret = -1;
+        }
+        else
+        {
+            ret = sendto(sockfd, buf, len, flags, (const struct sockaddr *)&s->dest_address, sizeof(s->dest_address));
+        }
+    }
+    else if (s->type != SOCK_STREAM) /* RAW */
     {
         errno = EDESTADDRREQ;
         ret = -1;
@@ -1048,16 +1136,7 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
     }
     else if (s->type == SOCK_DGRAM)
     {
-        if (s->state == W5100_SOCK_STATE_CREATED)
-        {
-            uint16_t port;
-
-            port = get_avail_port();
-
-            w5100_write_sock_regx(W5100_Sn_PORT, s->isocket, &port);
-            w5100_command(s->isocket, W5100_CMD_OPEN);
-            s->state = W5100_SOCK_STATE_BOUND;
-        }
+        check_bind_udp(s);
 
         if (len > get_tx_size(s->isocket))
         {
