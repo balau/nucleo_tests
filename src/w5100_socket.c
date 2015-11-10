@@ -774,7 +774,90 @@ uint16_t read_buf(int isocket, void *buf, size_t len)
         read_buf_sure(isocket, buf, len, &pread);
         read_buf_recv(isocket, pread);
     }
-    return toread;
+    return len;
+}
+
+static
+uint16_t write_buf_len(int isocket)
+{
+    uint16_t nfree;
+
+    w5100_read_sock_regx(W5100_Sn_TX_FSR, isocket, &nfree);
+    nfree = ntohs(nfree);
+
+    return nfree;
+}
+
+static
+uint16_t write_buf_pstart(int isocket)
+{
+    uint16_t pwrite;
+
+    w5100_read_sock_regx(W5100_Sn_TX_WR, isocket, &pwrite);
+    pwrite = ntohs(pwrite);
+
+    return pwrite;
+}
+
+static
+void write_buf_send(int isocket, uint16_t pstop)
+{
+    pstop = htons(pstop);
+    w5100_write_sock_regx(W5100_Sn_TX_WR, isocket, &pstop);
+    w5100_command(isocket, W5100_CMD_SEND);
+}
+
+static
+void write_buf_sure(int isocket, const void *buf, size_t len, uint16_t *pwrite)
+{
+    uint16_t offset;
+    uint16_t phys;
+    uint16_t towrite1;
+    uint16_t towrite2;
+    const uint8_t *bytes = buf;
+    
+    offset = *pwrite & get_tx_mask(isocket);
+    phys = offset + get_tx_base(isocket);
+    if (len + offset > get_tx_size(isocket))
+    {
+        towrite1 = get_tx_size(isocket) - offset;
+        towrite2 = len - towrite1;
+    }
+    else
+    {
+        towrite1 = len;
+        towrite2 = 0;
+    }
+    if (towrite1 > 0)
+    {
+        w5100_write_mem(phys, &bytes[0], towrite1);
+    }
+    if (towrite2 > 0)
+    {
+        w5100_write_mem(get_tx_base(isocket), &bytes[towrite1], towrite2);
+    }
+    pwrite += len;
+}
+
+static
+uint16_t write_buf(int isocket, const void *buf, size_t len)
+{
+    uint16_t nfree;
+
+    nfree = write_buf_len(isocket);
+    if (nfree > 0)
+    {
+        uint16_t pwrite;
+
+        if (len > nfree)
+        {
+            len = nfree;
+        }
+        pwrite = write_buf_pstart(isocket);
+        write_buf_sure(isocket, buf, len, &pwrite);
+        write_buf_send(isocket, pwrite);
+    }
+    return len;
 }
 
 ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
@@ -908,54 +991,7 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     }
     else
     {
-        int isocket;
-        uint16_t nfree;
-        uint16_t pwrite;
-        uint16_t offset;
-        uint16_t phys;
-        uint16_t towrite;
-        uint16_t towrite1;
-        uint16_t towrite2;
-        uint16_t newwr;
-        const uint8_t *bytes = buf;
-        
-        isocket = s->isocket;
-        w5100_read_sock_regx(W5100_Sn_TX_FSR, isocket, &nfree);
-        nfree = ntohs(nfree);
-        w5100_read_sock_regx(W5100_Sn_TX_WR, isocket, &pwrite);
-        pwrite = ntohs(pwrite);
-        offset = pwrite & get_tx_mask(isocket);
-        phys = offset + get_tx_base(isocket);
-        if (len > nfree)
-        {
-            towrite = nfree;
-        }
-        else
-        {
-            towrite = len;
-        }
-        if (towrite > (get_tx_size(isocket) - offset))
-        {
-            towrite1 = get_tx_size(isocket) - offset;
-            towrite2 = towrite - towrite1;
-        }
-        else
-        {
-            towrite1 = towrite;
-            towrite2 = 0;
-        }
-        if (towrite1 > 0)
-        {
-            w5100_write_mem(phys, &bytes[0], towrite1);
-        }
-        if (towrite2 > 0)
-        {
-            w5100_write_mem(get_tx_base(isocket), &bytes[towrite1], towrite2);
-        }
-        newwr = htons(pwrite + towrite);
-        w5100_write_sock_regx(W5100_Sn_TX_WR, isocket, &newwr);
-        w5100_command(isocket, W5100_CMD_SEND);
-        ret = towrite;
+        ret = write_buf(s->isocket, buf, len);
     }
     return ret;
 }
@@ -977,7 +1013,14 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         (void)dest_len; /* ignore */
         ret = send(sockfd, buf, len, flags);
     }
-    else /* TODO: UDP or RAW */
+    else if (s->type == SOCK_DGRAM)
+    {
+        /* TODO: check address NULL and check if connect */
+        /* TODO: UDP */
+        errno = EBADF;
+        ret = -1;
+    }
+    else /* TODO: RAW */
     {
         errno = EBADF;
         ret = -1;
