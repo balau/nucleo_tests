@@ -40,7 +40,7 @@
 /* A drawing of the format of BOOTP message is in RFC 1542 */
 
 
-#define MAC_ADDR_LEN 8
+#define MAC_ADDR_LEN 6
 
 /* OP */
 #define BOOTREQUEST 1
@@ -115,10 +115,13 @@
 #define DHCPINFORM   8
 
 #define MAGIC htonl(0x63825363)
+#define LEN_MAGIC 4
 #define FLAG_BROADCAST htons(0x8000)
+#define XID htonl(0xdeadbee0)
 
-#define DHCP_OPTIONS_LEN_MAX (4 + 64) /* including magic */
+#define DHCP_OPTIONS_LEN_MAX 312 /* including magic */
 #define DHCP_MESSAGE_LEN_MAX (DHCP_MESSAGE_HEADER_LEN + DHCP_OPTIONS_LEN_MAX)
+#define DHCP_MESSAGE_LEN_MIN (DHCP_MESSAGE_HEADER_LEN + LEN_MAGIC)
 
 struct offer
 {
@@ -148,23 +151,210 @@ uint8_t *setfield32(uint8_t *field, uint32_t val)
 }
 
 static
+size_t dhcp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xid)
+{
+    uint32_t magic = MAGIC;
+
+    if (msg[OFFSET_OP] != BOOTREPLY)
+    {
+        return OFFSET_OP;
+    }
+    else if (msg[OFFSET_HTYPE] != 1)
+    {
+        return OFFSET_HTYPE;
+    }
+    else if (msg[OFFSET_HLEN] != 6)
+    {
+        return OFFSET_HLEN;
+    }
+    else if (memcmp(&msg[OFFSET_XID], &xid, sizeof(uint32_t)) != 0)
+    {
+        return OFFSET_XID;
+    } 
+    else if (memcmp(&msg[OFFSET_CHADDR], mac_addr, MAC_ADDR_LEN) != 0)
+    {
+        return OFFSET_CHADDR;
+    }
+    else if (memcmp(&msg[OFFSET_OPTIONS], &magic, LEN_MAGIC) != 0)
+    {
+        return OFFSET_OPTIONS;
+    }
+    return OFFSET_OPTIONS + LEN_MAGIC;
+}
+
+static
+int dhcp_check_offer(
+        const uint8_t *p_options,
+        size_t options_size,
+        struct offer *offer)
+{
+    int ret;
+    const uint8_t * const p_end = p_options + options_size;
+    int isoffer = 0;
+    int len_error = 0;
+    struct offer o;
+
+    memset(&o, 0, sizeof(struct offer)); /* INADDR_ANY */
+
+    while((p_options < p_end))
+    {
+        uint8_t option;
+
+        option = *p_options++;
+        if (option == OPT_PAD)
+        {
+            continue;
+        }
+        else if (option == OPT_END)
+        {
+            break;
+        }
+        else
+        {
+            uint8_t len;
+            uint32_t lease;
+
+            len = *p_options++;
+            switch(option)
+            {
+                case OPT_DHCP_MESSAGE_TYPE:
+                    len_error |= (len != 1);
+                    isoffer = ((*p_options) == DHCPOFFER);
+                    break;
+                case OPT_SERVER_IDENTIFIER:
+                    len_error |= (len != 4);
+                    memcpy(&o.server, p_options, sizeof(in_addr_t));
+                    break;
+                case OPT_IP_ADDRESS_LEASE_TIME:
+                    len_error |= (len != 4);
+                    memcpy(&lease, p_options, sizeof(uint32_t));
+                    o.binding.lease = ntohl(lease);
+                    break;
+                case OPT_SUBNET:
+                    len_error |= (len != 4);
+                    memcpy(&o.binding.subnet, p_options, sizeof(in_addr_t));
+                    break;
+                case OPT_ROUTER:
+                    len_error |= (len != 4);
+                    memcpy(&o.binding.gateway, p_options, sizeof(in_addr_t));
+                    break;
+                case OPT_DOMAIN_NAME_SERVER:
+                    len_error |= ((len % 4) != 0);
+                    memcpy(&o.binding.dns_server, p_options, sizeof(in_addr_t));
+                    break;
+                default:
+                    /* ignore other options */
+                    break;
+            }
+            p_options += len;
+        }
+    }
+    if (!isoffer)
+    {
+        ret = DHCP_EOFFEREXPECTED;
+    }
+    if (o.server == INADDR_ANY)
+    {
+        ret = DHCP_ENOSERVERID;
+    }
+    else if (o.binding.gateway == INADDR_ANY)
+    {
+        ret = DHCP_ENOGATEWAY;
+    }
+    else if (o.binding.subnet == INADDR_ANY)
+    {
+        ret = DHCP_ENOSUBNET;
+    }
+    else
+    {
+        if (o.binding.lease == 0)
+        {
+            o.binding.lease = 0xFFFFFFFF; /* infinity */
+        }
+        /* DNS is not necessary */
+        *offer = o;
+        ret = 0;
+    }
+
+    return ret;
+}
+
+static
 int dhcp_offer_recv(
         int sock,
         const uint8_t *mac_addr,
+        uint32_t xid,
         struct offer *offer)
 {
-    return DHCP_EINTERNAL;
+    int ret;
+
+    while(1)
+    {
+        uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
+        ssize_t dhcp_message_size;
+        struct sockaddr_in server;
+        socklen_t server_addr_len;
+
+        /* TODO: timeout */
+        dhcp_message_size = recvfrom(
+                sock,
+                dhcp_message,
+                sizeof(dhcp_message),
+                0,
+                (struct sockaddr *)&server,
+                &server_addr_len);
+        if (dhcp_message_size < 0)
+        {
+            ret = DHCP_ESYSCALL;
+            break;
+        }
+        else if (server.sin_port != htons(67))
+        {
+            continue;
+        }
+        else if (dhcp_message_size < DHCP_MESSAGE_LEN_MIN)
+        {
+            continue;
+        }
+        else if (dhcp_check_reply(dhcp_message, mac_addr, xid) <= OFFSET_OPTIONS)
+        {
+            continue;
+        }
+        else /* It's a DHCP reply for us */
+        {
+            in_addr_t yiaddr;
+
+            memcpy(&yiaddr, &dhcp_message[OFFSET_YIADDR], sizeof(in_addr_t));
+            if ((yiaddr == INADDR_ANY) || (yiaddr == INADDR_BROADCAST))
+            {
+                ret = DHCP_EYIADDR;
+            }
+            else
+            {
+                ret = dhcp_check_offer(
+                        &dhcp_message[DHCP_MESSAGE_HEADER_LEN + LEN_MAGIC],
+                        dhcp_message_size - DHCP_MESSAGE_HEADER_LEN - LEN_MAGIC,
+                        offer);
+                if (ret == 0)
+                {
+                    offer->binding.client = yiaddr;
+                }
+            }
+            break;
+        }
+    }
+    return ret;
 }
 
 static
 int dhcp_discover_send(
         int sock,
-        const uint8_t *mac_addr)
+        const uint8_t *mac_addr,
+        uint32_t *xid
+        )
 {
     struct sockaddr_in server;
     uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
-    ssize_t dhcp_message_size;
-    uint32_t xid;
     uint8_t *p_options;
     
     /* destination is 255.255.255.255:67 broadcast address */
@@ -177,8 +367,8 @@ int dhcp_discover_send(
     dhcp_message[OFFSET_HTYPE] = 1;
     dhcp_message[OFFSET_HLEN] = 6;
     dhcp_message[OFFSET_HOPS] = 0;
-    xid = htonl(0xdeadbee0); /* TODO: random */
-    setfield32(&dhcp_message[OFFSET_XID], xid);
+    *xid = XID; /* TODO: random */
+    setfield32(&dhcp_message[OFFSET_XID], *xid);
     setfield16(&dhcp_message[OFFSET_SECS], 0);
     setfield16(&dhcp_message[OFFSET_FLAGS], FLAG_BROADCAST);
     /* ciaddr = 0 */
@@ -208,13 +398,12 @@ int dhcp_discover_send(
     *p_options++ = DHCPDISCOVER;
     
     *p_options++ = OPT_END;
-
-    dhcp_message_size = p_options - dhcp_message;
+    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
 
     if (sendto(
             sock,
             dhcp_message,
-            dhcp_message_size,
+            sizeof(dhcp_message),
             0,
             (struct sockaddr *)&server,
             sizeof(server)
@@ -256,12 +445,14 @@ int dhcp_discover(
     
     for (attempt = 0; attempt < DHCP_DISCOVER_RETRIES; attempt++)
     {
-        ret = dhcp_discover_send(sock, mac_addr);
+        uint32_t xid;
+
+        ret = dhcp_discover_send(sock, mac_addr, &xid);
         if (ret != 0)
         {
             continue;/* retry */
         }
-        ret = dhcp_offer_recv(sock, mac_addr, offer);
+        ret = dhcp_offer_recv(sock, mac_addr, xid, offer);
         if (ret != 0)
         {
             continue;/* retry */
