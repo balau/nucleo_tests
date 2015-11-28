@@ -27,7 +27,6 @@ OBJS += $(ROOT_DIR)/src/syscalls.o
 OBJS += $(ROOT_DIR)/src/file.o
 LDLIBS_SYS =
 
-#$(ROOT_DIR)/src/w5100_socket.o: CPPFLAGS += -DW5100_NO_STATIC_IP
 CPPFLAGS += -DW5100_NO_STATIC_IP
 
 include ../test.mk
