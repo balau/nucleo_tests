@@ -14,7 +14,7 @@ void print_ipaddr(const char *name, in_addr_t addr)
     struct in_addr in;
 
     in.s_addr = addr;
-    printf("%s: %s", name, inet_ntoa(in));
+    printf("%s: %s\n", name, inet_ntoa(in));
 }
 
 static
