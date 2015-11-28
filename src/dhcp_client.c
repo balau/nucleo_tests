@@ -183,18 +183,16 @@ size_t dhcp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xi
 }
 
 static
-int dhcp_check_offer(
+int dhcp_parse_options(
         const uint8_t *p_options,
         size_t options_size,
-        struct offer *offer)
+        uint8_t *type,
+        struct dhcp_binding *binding,
+        in_addr_t *server
+        )
 {
-    int ret;
     const uint8_t * const p_end = p_options + options_size;
-    int isoffer = 0;
     int len_error = 0;
-    struct offer o;
-
-    memset(&o, 0, sizeof(struct offer)); /* INADDR_ANY */
 
     while((p_options < p_end))
     {
@@ -219,28 +217,28 @@ int dhcp_check_offer(
             {
                 case OPT_DHCP_MESSAGE_TYPE:
                     len_error |= (len != 1);
-                    isoffer = ((*p_options) == DHCPOFFER);
+                    *type = *p_options;
                     break;
                 case OPT_SERVER_IDENTIFIER:
                     len_error |= (len != 4);
-                    memcpy(&o.server, p_options, sizeof(in_addr_t));
+                    memcpy(server, p_options, sizeof(in_addr_t));
                     break;
                 case OPT_IP_ADDRESS_LEASE_TIME:
                     len_error |= (len != 4);
                     memcpy(&lease, p_options, sizeof(uint32_t));
-                    o.binding.lease = ntohl(lease);
+                    binding->lease = ntohl(lease);
                     break;
                 case OPT_SUBNET:
                     len_error |= (len != 4);
-                    memcpy(&o.binding.subnet, p_options, sizeof(in_addr_t));
+                    memcpy(&binding->subnet, p_options, sizeof(in_addr_t));
                     break;
                 case OPT_ROUTER:
                     len_error |= (len != 4);
-                    memcpy(&o.binding.gateway, p_options, sizeof(in_addr_t));
+                    memcpy(&binding->gateway, p_options, sizeof(in_addr_t));
                     break;
                 case OPT_DOMAIN_NAME_SERVER:
                     len_error |= ((len % 4) != 0);
-                    memcpy(&o.binding.dns_server, p_options, sizeof(in_addr_t));
+                    memcpy(&binding->dns_server, p_options, sizeof(in_addr_t));
                     break;
                 default:
                     /* ignore other options */
@@ -249,6 +247,32 @@ int dhcp_check_offer(
             p_options += len;
         }
     }
+
+    return len_error?-1:0;
+}
+
+static
+int dhcp_check_offer(
+        const uint8_t *p_options,
+        size_t options_size,
+        struct offer *offer)
+{
+    int ret;
+    int isoffer;
+    struct offer o;
+    uint8_t type;
+
+    memset(&o, 0, sizeof(struct offer)); /* INADDR_ANY */
+
+    dhcp_parse_options(
+            p_options,
+            options_size,
+            &type,
+            &o.binding,
+            &o.server);
+
+    isoffer = (type == DHCPOFFER);
+
     if (!isoffer)
     {
         ret = DHCP_EOFFEREXPECTED;
@@ -280,6 +304,51 @@ int dhcp_check_offer(
 }
 
 static
+ssize_t dhcp_reply_recv(
+        int sock,
+        const uint8_t *mac_addr,
+        uint32_t xid,
+        uint8_t *dhcp_message
+        )
+{
+    int ret;
+    ssize_t dhcp_message_size;
+    struct sockaddr_in server;
+    socklen_t server_addr_len;
+
+    /* TODO: timeout */
+    dhcp_message_size = recvfrom(
+            sock,
+            dhcp_message,
+            sizeof(dhcp_message),
+            0,
+            (struct sockaddr *)&server,
+            &server_addr_len);
+    if (dhcp_message_size < 0)
+    {
+        ret = DHCP_ESYSCALL;
+    }
+    else if (server.sin_port != htons(67))
+    {
+        ret = 0;
+    }
+    else if (dhcp_message_size < DHCP_MESSAGE_LEN_MIN)
+    {
+        ret = 0;
+    }
+    else if (dhcp_check_reply(dhcp_message, mac_addr, xid) <= OFFSET_OPTIONS)
+    {
+        ret = 0;
+    }
+    else
+    {
+        ret = dhcp_message_size;
+    }
+
+    return ret;
+}
+
+static
 int dhcp_offer_recv(
         int sock,
         const uint8_t *mac_addr,
@@ -292,33 +361,21 @@ int dhcp_offer_recv(
     {
         uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
         ssize_t dhcp_message_size;
-        struct sockaddr_in server;
-        socklen_t server_addr_len;
 
         /* TODO: timeout */
-        dhcp_message_size = recvfrom(
+        dhcp_message_size = dhcp_reply_recv(
                 sock,
-                dhcp_message,
-                sizeof(dhcp_message),
-                0,
-                (struct sockaddr *)&server,
-                &server_addr_len);
-        if (dhcp_message_size < 0)
+                mac_addr,
+                xid,
+                dhcp_message);
+        if (dhcp_message_size == 0)
         {
-            ret = DHCP_ESYSCALL;
+            continue;
+        }
+        else if (dhcp_message_size < 0)
+        {
+            ret = dhcp_message_size;
             break;
-        }
-        else if (server.sin_port != htons(67))
-        {
-            continue;
-        }
-        else if (dhcp_message_size < DHCP_MESSAGE_LEN_MIN)
-        {
-            continue;
-        }
-        else if (dhcp_check_reply(dhcp_message, mac_addr, xid) <= OFFSET_OPTIONS)
-        {
-            continue;
         }
         else /* It's a DHCP reply for us */
         {
@@ -544,6 +601,58 @@ int dhcp_request_send(
 }
 
 static
+int dhcp_ack_check(
+        const uint8_t *p_options,
+        size_t options_size,
+        struct ack *ack)
+{
+    int ret;
+    int isoffer;
+    struct ack a;
+    uint8_t type;
+
+    memset(&a, 0, sizeof(struct offer)); /* INADDR_ANY */
+
+    dhcp_parse_options(
+            p_options,
+            options_size,
+            &type,
+            &a.binding,
+            &a.server);
+
+    isoffer = (type == DHCPACK);
+
+    if (!isoffer)
+    {
+        ret = DHCP_EOFFEREXPECTED;
+    }
+    if (a.server == INADDR_ANY)
+    {
+        ret = DHCP_ENOSERVERID;
+    }
+    else if (a.binding.gateway == INADDR_ANY)
+    {
+        ret = DHCP_ENOGATEWAY;
+    }
+    else if (a.binding.subnet == INADDR_ANY)
+    {
+        ret = DHCP_ENOSUBNET;
+    }
+    else
+    {
+        if (a.binding.lease == 0)
+        {
+            a.binding.lease = 0xFFFFFFFF; /* infinity */
+        }
+        /* DNS is not necessary */
+        *ack = a;
+        ret = 0;
+    }
+
+    return ret;
+}
+
+static
 int dhcp_ack_recv(
         int sock,
         const uint8_t *mac_addr,
@@ -551,7 +660,53 @@ int dhcp_ack_recv(
         const struct offer *offer,
         struct ack *ack)
 {
-    return DHCP_EINTERNAL;
+    int ret;
+
+    while(1)
+    {
+        uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
+        ssize_t dhcp_message_size;
+
+        /* TODO: timeout */
+        dhcp_message_size = dhcp_reply_recv(
+                sock,
+                mac_addr,
+                xid,
+                dhcp_message);
+        if (dhcp_message_size == 0)
+        {
+            continue;
+        }
+        else if (dhcp_message_size < 0)
+        {
+            ret = dhcp_message_size;
+            break;
+        }
+        else /* It's a DHCP reply for us */
+        {
+            in_addr_t yiaddr;
+
+            memcpy(&yiaddr, &dhcp_message[OFFSET_YIADDR], sizeof(in_addr_t));
+            if ((yiaddr == INADDR_ANY) || (yiaddr == INADDR_BROADCAST))
+            {
+                ret = DHCP_EYIADDR;
+            }
+            else
+            {
+                ret = dhcp_ack_check(
+                        &dhcp_message[DHCP_MESSAGE_HEADER_LEN + LEN_MAGIC],
+                        dhcp_message_size - DHCP_MESSAGE_HEADER_LEN - LEN_MAGIC,
+                        ack);
+                (void)offer; /* TODO: check that ack has same params */
+                if (ret == 0)
+                {
+                    ack->binding.client = yiaddr;
+                }
+            }
+            break;
+        }
+    }
+    return ret;
 }
 
 static
