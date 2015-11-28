@@ -1186,7 +1186,6 @@ __attribute__((__constructor__))
 void w5100_socket_init(void)
 {
     int i;
-    in_addr_t addr;
 
     w5100_init();
 
@@ -1203,13 +1202,18 @@ void w5100_socket_init(void)
     w5100_write_reg(W5100_RMSR, 0x55); /* 2KiB per socket */
     w5100_write_reg(W5100_TMSR, 0x55); /* 2KiB per socket */
     w5100_write_regx(W5100_SHAR, w5100_mac_addr);
+
 #ifdef W5100_STATIC_IP
-    addr = inet_addr(W5100_IP_ADDR);
-    w5100_write_regx(W5100_SIPR, &addr);
-    addr = inet_addr(W5100_GATEWAY_ADDR);
-    w5100_write_regx(W5100_GAR, &addr);
-    addr = inet_addr(W5100_SUBNET);
-    w5100_write_regx(W5100_SUBR, &addr);
+    do {
+        in_addr_t addr;
+
+        addr = inet_addr(W5100_IP_ADDR);
+        w5100_write_regx(W5100_SIPR, &addr);
+        addr = inet_addr(W5100_GATEWAY_ADDR);
+        w5100_write_regx(W5100_GAR, &addr);
+        addr = inet_addr(W5100_SUBNET);
+        w5100_write_regx(W5100_SUBR, &addr);
+    } while(0);
 #endif
 }
 
