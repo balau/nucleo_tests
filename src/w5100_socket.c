@@ -27,14 +27,22 @@
 
 #define W5100_SOCKET_FREE (-1)
 
-#ifndef W5100_IP_ADDR
-#  define W5100_IP_ADDR "192.168.1.99"
+#if !defined(W5100_NO_STATIC_IP) && !defined(W5100_STATIC_IP)
+#  define W5100_STATIC_IP
+#elif defined(W5100_NO_STATIC_IP) && defined(W5100_STATIC_IP)
+#  error "Only one of W5100_NO_STATIC_IP or W5100_STATIC_IP must be defined."
 #endif
-#ifndef W5100_SUBNET
-#  define W5100_SUBNET "255.255.255.0"
-#endif
-#ifndef W5100_GATEWAY_ADDR
-#  define W5100_GATEWAY_ADDR "192.168.1.1"
+
+#ifdef W5100_STATIC_IP
+#  ifndef W5100_IP_ADDR
+#    define W5100_IP_ADDR "192.168.1.99"
+#  endif
+#  ifndef W5100_SUBNET
+#    define W5100_SUBNET "255.255.255.0"
+#  endif
+#  ifndef W5100_GATEWAY_ADDR
+#    define W5100_GATEWAY_ADDR "192.168.1.1"
+#  endif
 #endif
 
 enum w5100_socket_state {
@@ -1195,11 +1203,13 @@ void w5100_socket_init(void)
     w5100_write_reg(W5100_RMSR, 0x55); /* 2KiB per socket */
     w5100_write_reg(W5100_TMSR, 0x55); /* 2KiB per socket */
     w5100_write_regx(W5100_SHAR, w5100_mac_addr);
+#ifdef W5100_STATIC_IP
     addr = inet_addr(W5100_IP_ADDR);
     w5100_write_regx(W5100_SIPR, &addr);
     addr = inet_addr(W5100_GATEWAY_ADDR);
     w5100_write_regx(W5100_GAR, &addr);
     addr = inet_addr(W5100_SUBNET);
     w5100_write_regx(W5100_SUBR, &addr);
+#endif
 }
 
