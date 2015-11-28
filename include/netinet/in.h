@@ -22,8 +22,6 @@
 /* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/netinet_in.h.html */
 
 #include <inttypes.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
 
 typedef uint16_t in_port_t;
 
@@ -32,6 +30,9 @@ typedef uint32_t in_addr_t;
 struct in_addr {
     in_addr_t  s_addr;
 };
+
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 struct sockaddr_in {
     sa_family_t     sin_family; /* AF_INET. */
