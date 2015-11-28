@@ -48,6 +48,12 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding);
 
 #define DHCP_EINTERNAL (-1)
 #define DHCP_ESYSCALL (-2)
+#define DHCP_EYIADDR (-3)
+#define DHCP_EOFFEREXPECTED (-4)
+#define DHCP_ENOSERVERID (-5)
+#define DHCP_ENOGATEWAY (-6)
+#define DHCP_ENOSUBNET (-7)
+
 
 #endif /* DHCP_CLIENT_H */
 
