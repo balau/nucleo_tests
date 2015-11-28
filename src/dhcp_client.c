@@ -347,21 +347,12 @@ int dhcp_offer_recv(
 }
 
 static
-int dhcp_discover_send(
-        int sock,
+uint8_t *dhcp_prepare_bootp(
+        uint8_t *dhcp_message,
         const uint8_t *mac_addr,
         uint32_t *xid
         )
 {
-    struct sockaddr_in server;
-    uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
-    uint8_t *p_options;
-    
-    /* destination is 255.255.255.255:67 broadcast address */
-    server.sin_addr.s_addr = INADDR_BROADCAST;
-    server.sin_family = AF_INET;
-    server.sin_port = htons(67);
-
     /* Construct BOOTP header */
     dhcp_message[OFFSET_OP] = BOOTREQUEST;
     dhcp_message[OFFSET_HTYPE] = 1;
@@ -388,22 +379,29 @@ int dhcp_discover_send(
             0,
             (LEN_CHADDR - MAC_ADDR_LEN) + LEN_SNAME + LEN_FILE
             );
+    setfield32(&dhcp_message[OFFSET_OPTIONS], MAGIC);
 
-    /* Append DHCP options */
-    p_options = &dhcp_message[OFFSET_OPTIONS];
-    p_options = setfield32(p_options, MAGIC);
+    return &dhcp_message[OFFSET_OPTIONS + LEN_MAGIC];
+}
 
-    *p_options++ = OPT_DHCP_MESSAGE_TYPE;
-    *p_options++ = 1;
-    *p_options++ = DHCPDISCOVER;
-    
-    *p_options++ = OPT_END;
-    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
+static
+int dhcp_send(
+        int sock,
+        const uint8_t *dhcp_message,
+        size_t dhcp_message_size
+        )
+{
+    struct sockaddr_in server;
+
+    /* destination is 255.255.255.255:67 broadcast address */
+    server.sin_addr.s_addr = INADDR_BROADCAST;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(67);
 
     if (sendto(
             sock,
             dhcp_message,
-            sizeof(dhcp_message),
+            dhcp_message_size,
             0,
             (struct sockaddr *)&server,
             sizeof(server)
@@ -415,14 +413,47 @@ int dhcp_discover_send(
 }
 
 static
-int dhcp_discover(
+uint8_t *dhcp_append_common_options(uint8_t *p_options, uint8_t type)
+{
+    *p_options++ = OPT_DHCP_MESSAGE_TYPE;
+    *p_options++ = 1;
+    *p_options++ = type;
+
+    *p_options++ = OPT_PARAMETER_REQUEST_LIST;
+    *p_options++ = 3;
+    *p_options++ = OPT_ROUTER;
+    *p_options++ = OPT_SUBNET;
+    *p_options++ = OPT_DOMAIN_NAME_SERVER;
+
+    return p_options;
+}
+
+static
+int dhcp_discover_send(
+        int sock,
         const uint8_t *mac_addr,
-        struct offer *offer)
+        uint32_t *xid
+        )
+{
+    uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
+    uint8_t *p_options;
+    
+    p_options = dhcp_prepare_bootp(dhcp_message, mac_addr, xid);
+
+    /* Append DHCP options */
+    p_options = dhcp_append_common_options(p_options, DHCPDISCOVER);
+    
+    *p_options++ = OPT_END;
+    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
+
+    return dhcp_send(sock, dhcp_message, sizeof(dhcp_message));
+}
+
+static
+int dhcp_socket_create(void)
 {
     int sock;
     struct sockaddr_in client;
-    int attempt;
-    int ret;
 
     /* create UDP socket */
     sock = socket(AF_INET , SOCK_DGRAM , 0);
@@ -442,7 +473,25 @@ int dhcp_discover(
         close(sock);
         return DHCP_ESYSCALL;
     }
-    
+
+    return sock;
+}
+
+static
+int dhcp_discover(
+        const uint8_t *mac_addr,
+        struct offer *offer)
+{
+    int attempt;
+    int ret;
+    int sock;
+   
+    sock = dhcp_socket_create();
+    if (sock < 0)
+    {
+        return sock;
+    }
+
     for (attempt = 0; attempt < DHCP_DISCOVER_RETRIES; attempt++)
     {
         uint32_t xid;
@@ -464,12 +513,81 @@ int dhcp_discover(
 }
 
 static
+int dhcp_request_send(
+        int sock,
+        const uint8_t *mac_addr,
+        const struct offer *offer,
+        uint32_t *xid)
+{
+    uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
+    uint8_t *p_options;
+    
+    p_options = dhcp_prepare_bootp(dhcp_message, mac_addr, xid);
+
+    /* Append DHCP options */
+    p_options = dhcp_append_common_options(p_options, DHCPREQUEST);
+    
+    *p_options++ = OPT_SERVER_IDENTIFIER;
+    *p_options++ = 4;
+    memcpy(p_options, &offer->server, 4);
+    p_options += 4;
+
+    *p_options++ = OPT_REQUESTED_IP_ADDRESS;
+    *p_options++ = 4;
+    memcpy(p_options, &offer->binding.client, 4);
+    p_options += 4;
+
+    *p_options++ = OPT_END;
+    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
+
+    return dhcp_send(sock, dhcp_message, sizeof(dhcp_message));
+}
+
+static
+int dhcp_ack_recv(
+        int sock,
+        const uint8_t *mac_addr,
+        uint32_t xid,
+        const struct offer *offer,
+        struct ack *ack)
+{
+    return DHCP_EINTERNAL;
+}
+
+static
 int dhcp_request(
         const uint8_t *mac_addr,
         const struct offer *offer,
         struct ack *ack)
 {
-    return DHCP_EINTERNAL;
+    int attempt;
+    int ret;
+    int sock;
+   
+    sock = dhcp_socket_create();
+    if (sock < 0)
+    {
+        return sock;
+    }
+
+    for (attempt = 0; attempt < DHCP_REQUEST_RETRIES; attempt++)
+    {
+        uint32_t xid;
+
+        ret = dhcp_request_send(sock, mac_addr, offer, &xid);
+        if (ret != 0)
+        {
+            continue;/* retry */
+        }
+        ret = dhcp_ack_recv(sock, mac_addr, xid, offer, ack);
+        if (ret != 0)
+        {
+            continue;/* retry */
+        }
+        break;
+    }
+    close(sock);
+    return ret;
 }
 
 int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
