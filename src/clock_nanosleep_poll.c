@@ -27,43 +27,30 @@ int clock_nanosleep(
         struct timespec *rmtp)
 {
     int ret;
-    struct timespec tbegin;
+    struct timespec tcurrent;
     struct timespec tend;
 
-    ret = clock_gettime(clock_id, &tbegin);
-    if (flags & TIMER_ABSTIME)
+    ret = clock_gettime(clock_id, &tcurrent);
+
+    if (!(flags & TIMER_ABSTIME))
     {
-        timespec_diff(&tbegin, rqtp, &tend);
+        ret = clock_gettime(clock_id, &tcurrent);
+        timespec_add(&tcurrent, rqtp, &tend);
         rqtp = &tend;
     }
 
-    while (ret != 0)
+    while (ret == 0)
     {
-        struct timespec tcurrent;
-
+        if (timespec_diff(&tcurrent, rqtp, NULL) <= 0)
+        {
+            if (rmtp != NULL)
+            {
+                rmtp->tv_sec = 0;
+                rmtp->tv_nsec = 0;
+            }
+            break;
+        }
         ret = clock_gettime(clock_id, &tcurrent);
-        if (flags & TIMER_ABSTIME)
-        {
-        }
-        else
-        {
-            struct timespec telapsed;
-            
-            if (timespec_diff(&tbegin, &tcurrent, &telapsed) < 0)
-            {
-                /* time goes backwards */
-            }
-            if (timespec_diff(&telapsed, rqtp, NULL) <= 0)
-            {
-                if (rmtp != NULL)
-                {
-                    rmtp->tv_sec = 0;
-                    rmtp->tv_nsec = 0;
-                }
-                break;
-            }
-
-        }
     }
 
     return ret;
