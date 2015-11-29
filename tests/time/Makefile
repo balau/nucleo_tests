@@ -23,7 +23,7 @@ OBJS += $(ROOT_DIR)/src/syscalls.o
 OBJS += $(ROOT_DIR)/src/file.o
 OBJS += $(ROOT_DIR)/src/nanosleep.o
 OBJS += $(ROOT_DIR)/src/clock_nanosleep_poll.o
-OBJS += $(ROOT_DIR)/src/clock_gettime_dummy.o
+OBJS += $(ROOT_DIR)/src/clock_gettime_systick.o
 OBJS += $(ROOT_DIR)/src/timespec.o
 
 include ../test.mk

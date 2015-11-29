@@ -23,17 +23,15 @@ int main(void)
 {
     struct timespec t;
 
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    printf("%lds %ldns\n", (long)t.tv_sec, (long)t.tv_nsec);
+    while(1)
+    {
+        clock_gettime(CLOCK_MONOTONIC, &t);
+        printf("%lds %ldns\n", (long)t.tv_sec, (long)t.tv_nsec);
 
-    t.tv_sec = 0;
-    t.tv_nsec = 1000000;
-    nanosleep(&t, NULL);
-    
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    printf("%lds %ldns\n", (long)t.tv_sec, (long)t.tv_nsec);
-
-    while(1);
+        t.tv_sec = 1;
+        t.tv_nsec = 0;
+        nanosleep(&t, NULL);
+    }
 }
 
 
