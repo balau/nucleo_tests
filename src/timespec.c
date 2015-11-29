@@ -80,6 +80,6 @@ extern
 void timeval_to_timespec(const struct timeval *src, struct timespec *dst)
 {
     dst->tv_sec = src->tv_sec;
-    dst->tv_usec = src->tv_nsec * (NSECS_IN_SEC / USECS_IN_SEC);
+    dst->tv_nsec = src->tv_usec * (NSECS_IN_SEC / USECS_IN_SEC);
 }
 
