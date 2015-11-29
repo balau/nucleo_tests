@@ -58,22 +58,22 @@ struct sockaddr_storage
 #define MSG_TRUNC     0x20 /* Normal data truncated. */
 #define MSG_WAITALL   0x40 /* Attempt to fill the read buffer. */
 
-#define SO_ACCEPTCONN 0x00 /* Socket is accepting connections. */
-#define SO_BROADCAST 0x00 /* Transmission of broadcast messages is supported. */
-#define SO_DEBUG 0x00 /* Debugging information is being recorded. */
-#define SO_DONTROUTE 0x00 /* Bypass normal routing. */
-#define SO_ERROR 0x00 /* Socket error status. */
-#define SO_KEEPALIVE 0x00 /* Connections are kept alive with periodic messages. */
-#define SO_LINGER 0x00 /* Socket lingers on close. */
-#define SO_OOBINLINE 0x00 /* Out-of-band data is transmitted in line. */
-#define SO_RCVBUF 0x00 /* Receive buffer size. */
-#define SO_RCVLOWAT 0x00 /* Receive ``low water mark''. */
-#define SO_RCVTIMEO 0x00 /* Receive timeout. */
-#define SO_REUSEADDR 0x00 /* Reuse of local addresses is supported. */
-#define SO_SNDBUF 0x00 /* Send buffer size. */
-#define SO_SNDLOWAT 0x00 /* Send ``low water mark''. */
-#define SO_SNDTIMEO 0x00 /* Send timeout. */
-#define SO_TYPE 0x00 /* Socket type. */
+#define SO_ACCEPTCONN   0x01 /* Socket is accepting connections. */
+#define SO_BROADCAST    0x02 /* Transmission of broadcast messages is supported. */
+#define SO_DEBUG        0x03 /* Debugging information is being recorded. */
+#define SO_DONTROUTE    0x04 /* Bypass normal routing. */
+#define SO_ERROR        0x05 /* Socket error status. */
+#define SO_KEEPALIVE    0x06 /* Connections are kept alive with periodic messages. */
+#define SO_LINGER       0x07 /* Socket lingers on close. */
+#define SO_OOBINLINE    0x08 /* Out-of-band data is transmitted in line. */
+#define SO_RCVBUF       0x09 /* Receive buffer size. */
+#define SO_RCVLOWAT     0x0A /* Receive ``low water mark''. */
+#define SO_RCVTIMEO     0x0B /* Receive timeout. */
+#define SO_REUSEADDR    0x0C /* Reuse of local addresses is supported. */
+#define SO_SNDBUF       0x0D /* Send buffer size. */
+#define SO_SNDLOWAT     0x0E /* Send ``low water mark''. */
+#define SO_SNDTIMEO     0x0F /* Send timeout. */
+#define SO_TYPE         0x10 /* Socket type. */
 
 #define SOL_SOCKET 0xFF /* Options to be accessed at socket level, not protocol level. */
 
@@ -98,10 +98,8 @@ int     getpeername(int, struct sockaddr *__restrict, socklen_t *__restrict);
 extern
 int     getsockname(int, struct sockaddr *__restrict, socklen_t *__restrict);
 
-#if 0
 extern
 int     getsockopt(int, int, int, void *__restrict, socklen_t *__restrict);
-#endif
 
 extern
 int     listen(int, int);
@@ -129,10 +127,10 @@ ssize_t sendmsg(int, const struct msghdr *, int);
 extern
 ssize_t sendto(int, const void *, size_t, int, const struct sockaddr *,
         socklen_t);
-#if 0
+
 extern
 int     setsockopt(int, int, int, const void *, socklen_t);
-#endif
+
 
 extern
 int     shutdown(int, int);
