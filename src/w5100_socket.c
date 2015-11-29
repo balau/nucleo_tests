@@ -1154,7 +1154,10 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
     }
     else if (s->type == SOCK_DGRAM)
     {
+        const struct sockaddr_in *peer;
+
         check_bind_udp(s);
+        peer = (struct sockaddr_in *)dest_address;
 
         if (len > get_tx_size(s->isocket))
         {
@@ -1166,15 +1169,17 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
             errno = EDESTADDRREQ;
             ret = -1;
         }
+        else if ((peer->sin_addr.s_addr == INADDR_BROADCAST) && !s->can_broadcast)
+        {
+            errno = EINVAL;
+            ret = -1;
+        }
         else
         {
             do
             {
                 if (write_buf_len(s->isocket) >= len)
                 {
-                    const struct sockaddr_in *peer;
-
-                    peer = (struct sockaddr_in *)dest_address;
                     w5100_write_sock_regx(W5100_Sn_DIPR, s->isocket, &peer->sin_addr.s_addr);
                     w5100_write_sock_regx(W5100_Sn_DPORT, s->isocket, &peer->sin_port);
 
