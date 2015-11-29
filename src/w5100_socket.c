@@ -21,7 +21,10 @@
 #include <errno.h>
 #include <file.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include "w5100.h"
+#include "timespec.h"
 
 /******* defines and macros ********/
 
@@ -82,6 +85,9 @@ static struct w5100_socket {
     int protocol;
     enum w5100_socket_state state;
     struct sockaddr_in dest_address;
+    int can_broadcast;
+    struct timespec recv_timeout;
+    struct timespec send_timeout;
     struct fd *fd_data;
     struct fd *connection_data;
 } w5100_sockets[W5100_N_SOCKETS];
@@ -332,6 +338,7 @@ int socket_create(int type)
             struct fd *fds;
             struct w5100_socket *s;
             uint8_t sock_mode;
+            struct timespec zerotime = {0, 0};
             
             fds = fill_fd_struct(fd, isocket);
             s = get_socket_from_isocket(isocket);
@@ -345,6 +352,9 @@ int socket_create(int type)
             s->dest_address.sin_family = AF_UNSPEC;
             s->fd_data = fds;
             s->connection_data = NULL;
+            s->recv_timeout = zerotime;
+            s->send_timeout = zerotime;
+            s->can_broadcast = 0;
             
             switch(type)
             {
@@ -1179,6 +1189,95 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         errno = EBADF;
         ret = -1;
     }
+    return ret;
+}
+
+int setsockopt(int sockfd, int level, int option_name, const void *option_value, socklen_t option_len)
+{
+    int ret;
+    struct w5100_socket *s;
+
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
+    {
+        ret = -1;
+    }
+    else if (level != SOL_SOCKET)
+    {
+        ret = EINVAL;
+    }
+    else
+    {
+        /* TODO: check and fill option_len */
+        (void)option_len;
+        switch (option_name)
+        {
+            case SO_BROADCAST:
+                s->can_broadcast = ((*(int *)option_value) != 0);
+                ret = 0;
+                break;
+            case SO_RCVTIMEO:
+                timeval_to_timespec((const struct timeval *)option_value, &s->recv_timeout);
+                ret = 0;
+                break;
+            case SO_SNDTIMEO:
+                timeval_to_timespec((const struct timeval *)option_value, &s->send_timeout);
+                ret = 0;
+                break;
+            default:
+                ret = EINVAL;
+                break;
+        }
+    }
+
+    return ret;
+}
+
+int getsockopt(int sockfd, int level, int option_name, void *__restrict option_value, socklen_t *__restrict option_len)
+{
+    int ret;
+    struct w5100_socket *s;
+
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
+    {
+        ret = -1;
+    }
+    else if (level != SOL_SOCKET)
+    {
+        ret = EINVAL;
+    }
+    else
+    {
+        /* TODO: check and fill option_len */
+        (void)option_len;
+        switch (option_name)
+        {
+            case SO_ACCEPTCONN:
+                *(int *)option_value = (s->state == W5100_SOCK_STATE_LISTENING);
+                ret = 0;
+                break;
+            case SO_BROADCAST:
+                ret = 0;
+                break;
+            case SO_RCVTIMEO:
+                timespec_to_timeval(&s->recv_timeout, (struct timeval *)option_value);
+                ret = 0;
+                break;
+            case SO_SNDTIMEO:
+                timespec_to_timeval(&s->send_timeout, (struct timeval *)option_value);
+                ret = 0;
+                break;
+            case SO_TYPE:
+                *(int *)option_value = s->type;
+                ret = 0;
+                break;
+            default:
+                ret = EINVAL;
+                break;
+        }
+    }
+
     return ret;
 }
 
