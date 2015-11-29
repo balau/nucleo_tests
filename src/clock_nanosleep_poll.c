@@ -17,40 +17,7 @@
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <time.h>
-
-static
-int timespec_diff(const struct timespec *from, const struct timespec *to, struct timespec *diff)
-{
-    long diff_nsec;
-    long diff_sec;
-    int ret;
-
-    /* assuming to and from have tv_nsec 0 up to 1000000000 excluded */
-
-    diff_nsec = to->tv_nsec - from->tv_nsec;
-    diff_sec = to->tv_sec - from->tv_sec;
-
-    if (diff_nsec < 0)
-    {
-        diff_nsec += 1000000000;
-        diff_sec--; 
-    }
-    if (diff != NULL)
-    {
-        diff->tv_nsec = diff_nsec;
-        diff->tv_sec = diff_sec;
-    }
-
-    if (diff_sec == 0)
-    {
-        ret = diff_nsec;
-    }
-    else
-    {
-        ret = diff_sec;
-    }
-    return ret;
-}
+#include "timespec.h"
 
 /* polling implementation */
 int clock_nanosleep(

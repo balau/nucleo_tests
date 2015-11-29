@@ -18,8 +18,7 @@
  */
 #include <time.h>
 #include <errno.h>
-
-#define NSECS_IN_SEC 1000000000
+#include "timespec.h"
 
 #ifndef CLOCK_GETTIME_DUMMY_STEP_SECS
 #  define CLOCK_GETTIME_DUMMY_STEP_SECS 0
@@ -37,18 +36,6 @@ static const struct timespec dummy_step = {
     .tv_sec = CLOCK_GETTIME_DUMMY_STEP_SECS,
     .tv_nsec = CLOCK_GETTIME_DUMMY_STEP_NSECS,
 };
-
-static
-void timespec_incr(struct timespec *x, const struct timespec *step)
-{
-    x->tv_sec += step->tv_sec;
-    x->tv_nsec += step->tv_nsec;
-    if (x->tv_nsec >= NSECS_IN_SEC)
-    {
-        x->tv_nsec -= NSECS_IN_SEC;
-        x->tv_sec++;
-    }
-}
 
 static
 struct timespec *clock_get(clockid_t clock_id)
