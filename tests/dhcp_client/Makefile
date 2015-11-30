@@ -26,6 +26,7 @@ OBJS += $(ROOT_DIR)/src/stdio_usart.o
 OBJS += $(ROOT_DIR)/src/syscalls.o
 OBJS += $(ROOT_DIR)/src/file.o
 OBJS += $(ROOT_DIR)/src/timespec.o
+OBJS += $(ROOT_DIR)/src/clock_gettime_systick.o
 LDLIBS_SYS =
 
 CPPFLAGS += -DW5100_NO_STATIC_IP
