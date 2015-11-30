@@ -28,9 +28,11 @@
 void sys_tick_handler(void);
 void clock_gettime_systick_init(void);
 
-static struct timespec realtime;
+static volatile struct timespec realtime;
 
-static struct timespec monotonic;
+static volatile struct timespec monotonic;
+
+static volatile int timer_update_flag;
 
 static const struct timespec systick_step = {
     .tv_sec = 0,
@@ -38,9 +40,9 @@ static const struct timespec systick_step = {
 };
 
 static
-struct timespec *clock_get(clockid_t clock_id)
+volatile struct timespec *clock_get(clockid_t clock_id)
 {
-    struct timespec *clk;
+    volatile struct timespec *clk;
 
     switch(clock_id)
     {
@@ -57,10 +59,20 @@ struct timespec *clock_get(clockid_t clock_id)
     return clk;
 }
 
+static
+void systick_fraction_to_timespec(uint32_t fraction, struct timespec *tp)
+{
+    uint32_t ticks;
+    
+    ticks = (rcc_ahb_frequency/SYSTICK_FREQ_HZ) - fraction;
+    tp->tv_sec = 0; /* assuming  SYSTICK_NSEC < NSECS_IN_SEC */
+    tp->tv_nsec = ticks * (NSECS_IN_SEC / rcc_ahb_frequency);
+}
+
 int clock_gettime(clockid_t clock_id, struct timespec *tp)
 {
     int ret;
-    struct timespec *clk;
+    volatile struct timespec *clk;
 
     clk = clock_get(clock_id);
     if (clk == NULL)
@@ -70,7 +82,20 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
     }
     else
     {
-        *tp = *clk;
+        int flag_before;
+        int flag_after;
+        uint32_t fraction_ticks;
+        struct timespec fraction_ts;
+
+        do {
+            flag_before = timer_update_flag;
+            *tp = *clk;
+            fraction_ticks = systick_get_value();
+            flag_after = timer_update_flag;
+            /* if they are the same, no systick occurred. */
+        } while (flag_before != flag_after);
+        systick_fraction_to_timespec(fraction_ticks, &fraction_ts);
+        timespec_incr(tp, &fraction_ts);
         ret = 0;
     }
     return ret;
@@ -79,7 +104,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
 int clock_settime(clockid_t clock_id, const struct timespec *tp)
 {
     int ret;
-    struct timespec *clk;
+    volatile struct timespec *clk;
 
     clk = clock_get(clock_id);
     if (clk == NULL)
@@ -104,7 +129,14 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
     }
     else
     {
-        *clk = *tp;
+        int flag_before;
+        int flag_after;
+        do {
+            flag_before = timer_update_flag;
+            *clk = *tp;
+            flag_after = timer_update_flag;
+            /* if they are the same, no systick occurred. */
+        } while (flag_before != flag_after);
         ret = 0;
     }
 
@@ -124,16 +156,28 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
         ret = 0;
         if (res != NULL)
         {
-            *res = systick_step;
+            systick_fraction_to_timespec(1, res);
         }
     }
     return ret;
 }
 
+static
+void sys_tick_incr(clockid_t clock_id)
+{
+    struct timespec *clk;
+
+    /* we can discard volatile because we are already in sys_tick_handler */
+    clk = (struct timespec *)clock_get(clock_id);
+
+    timespec_incr(clk, &systick_step);
+}
+
 void sys_tick_handler(void)
 {
-    timespec_incr(clock_get(CLOCK_MONOTONIC), &systick_step);
-    timespec_incr(clock_get(CLOCK_REALTIME), &systick_step);
+    sys_tick_incr(CLOCK_MONOTONIC);
+    sys_tick_incr(CLOCK_REALTIME);
+    timer_update_flag++;
 }
 
 __attribute__((__constructor__))
