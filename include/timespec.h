@@ -41,5 +41,11 @@ void timespec_incr(struct timespec *x, const struct timespec *step);
 extern
 int timespec_diff(const struct timespec *from, const struct timespec *to, struct timespec *diff);
 
+extern
+const struct timespec TIMESPEC_ZERO;
+
+extern
+const struct timespec TIMESPEC_INFINITY;
+
 #endif /* TIMESPEC_H */
 

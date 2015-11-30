@@ -17,6 +17,10 @@
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "timespec.h"
+#include <limits.h>
+
+const struct timespec TIMESPEC_ZERO = {0, 0};
+const struct timespec TIMESPEC_INFINITY = {INT_MAX, LONG_MAX};
 
 void timespec_add(const struct timespec *t1, const struct timespec *t2, struct timespec *dst)
 {
