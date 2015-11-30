@@ -58,6 +58,11 @@ enum w5100_socket_state {
     W5100_SOCK_STATE_DISCONNECTED,
 };
 
+struct timeout_manager {
+    int has_timeout;
+    struct timespec end;
+};
+
 /******* function prototypes ********/
 
 extern
@@ -74,6 +79,12 @@ int w5100_sock_read(int fd, char *buf, int len);
 
 static
 int w5100_sock_close(int fd);
+
+static
+void timeout_init(const struct timespec *timeout, struct timeout_manager *tom);
+
+static
+int timeout_ended(const struct timeout_manager *tom);
 
 /******* global variables ********/
 
@@ -338,7 +349,6 @@ int socket_create(int type)
             struct fd *fds;
             struct w5100_socket *s;
             uint8_t sock_mode;
-            struct timespec zerotime = {0, 0};
             
             fds = fill_fd_struct(fd, isocket);
             s = get_socket_from_isocket(isocket);
@@ -352,8 +362,8 @@ int socket_create(int type)
             s->dest_address.sin_family = AF_UNSPEC;
             s->fd_data = fds;
             s->connection_data = NULL;
-            s->recv_timeout = zerotime;
-            s->send_timeout = zerotime;
+            s->recv_timeout = TIMESPEC_ZERO;
+            s->send_timeout = TIMESPEC_ZERO;
             s->can_broadcast = 0;
             
             switch(type)
@@ -730,6 +740,41 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 }
 
 static
+void timeout_init(const struct timespec *timeout, struct timeout_manager *tom)
+{
+    tom->has_timeout = (timespec_diff(timeout, &TIMESPEC_ZERO, NULL) != 0);
+
+    if (tom->has_timeout)
+    {
+        clock_gettime(CLOCK_MONOTONIC, &tom->end);
+        timespec_incr(&tom->end, timeout);
+    }
+}
+
+static
+int timeout_ended(const struct timeout_manager *tom)
+{
+    int ret;
+    struct timespec cur;
+
+    if (tom->has_timeout)
+    {
+        clock_gettime(CLOCK_MONOTONIC, &cur);
+        ret = (timespec_diff(&cur, &tom->end, NULL) < 0);
+        if (ret)
+        {
+            errno = ETIMEDOUT;
+        }
+    }
+    else
+    {
+        ret = 0;
+    }
+
+    return ret;
+}
+
+static
 uint16_t get_tx_size(int isocket)
 {
     (void)isocket;
@@ -1028,6 +1073,9 @@ ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
     }
     else
     {
+        struct timeout_manager tom;
+
+        timeout_init(&s->recv_timeout, &tom);
         do
         {
             if (s->type == SOCK_STREAM)
@@ -1080,6 +1128,11 @@ ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
                     ret = msg_len;
                     break;
                 }
+            }
+            if (timeout_ended(&tom))
+            {
+                ret = -1;
+                break;
             }
         } while(1);
     }
@@ -1176,6 +1229,9 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         }
         else
         {
+            struct timeout_manager tom;
+
+            timeout_init(&s->send_timeout, &tom);
             do
             {
                 if (write_buf_len(s->isocket) >= len)
@@ -1184,6 +1240,11 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                     w5100_write_sock_regx(W5100_Sn_DPORT, s->isocket, &peer->sin_port);
 
                     ret = write_buf(s->isocket, buf, len);
+                    break;
+                }
+                if (timeout_ended(&tom))
+                {
+                    ret = -1;
                     break;
                 }
             } while(1); /* TODO: non blocking */
@@ -1209,7 +1270,8 @@ int setsockopt(int sockfd, int level, int option_name, const void *option_value,
     }
     else if (level != SOL_SOCKET)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else
     {
@@ -1230,7 +1292,8 @@ int setsockopt(int sockfd, int level, int option_name, const void *option_value,
                 ret = 0;
                 break;
             default:
-                ret = EINVAL;
+                ret = -1;
+                errno = EINVAL;
                 break;
         }
     }
@@ -1250,7 +1313,8 @@ int getsockopt(int sockfd, int level, int option_name, void *__restrict option_v
     }
     else if (level != SOL_SOCKET)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else
     {
@@ -1278,7 +1342,8 @@ int getsockopt(int sockfd, int level, int option_name, void *__restrict option_v
                 ret = 0;
                 break;
             default:
-                ret = EINVAL;
+                ret = -1;
+                errno = EINVAL;
                 break;
         }
     }
