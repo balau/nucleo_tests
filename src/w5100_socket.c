@@ -763,7 +763,7 @@ int timeout_ended(const struct timeout_manager *tom)
         ret = (timespec_diff(&cur, &tom->end, NULL) < 0);
         if (ret)
         {
-            errno = ETIMEDOUT;
+            errno = EAGAIN;
         }
     }
     else
@@ -1029,6 +1029,10 @@ uint16_t write_buf(int isocket, const void *buf, size_t len)
         write_buf_sure(isocket, buf, len, &pwrite);
         write_buf_send(isocket, pwrite);
     }
+    else
+    {
+        len = 0;
+    }
     return len;
 }
 
@@ -1183,7 +1187,27 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
     }
     else
     {
-        ret = write_buf(s->isocket, buf, len);
+        size_t towrite;
+        struct timeout_manager tom;
+        const uint8_t *bytes;
+
+        towrite = len;
+        bytes = buf;
+        timeout_init(&s->send_timeout, &tom);
+
+        while (towrite > 0)
+        {
+            size_t written;
+
+            written = write_buf(s->isocket, bytes, towrite);
+            bytes += written;
+            towrite -= written;
+            if (timeout_ended(&tom))
+            {
+                break;
+            }
+        }
+        ret = len - towrite;
     }
     return ret;
 }
