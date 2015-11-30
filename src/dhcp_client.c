@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <string.h>
+#include "timespec.h"
 
 //#define DHCP_DEBUG
 
@@ -226,7 +227,8 @@ int dhcp_parse_options(
                 case OPT_IP_ADDRESS_LEASE_TIME:
                     len_error |= (len != 4);
                     memcpy(&lease, p_options, sizeof(uint32_t));
-                    binding->lease = ntohl(lease);
+                    clock_gettime(CLOCK_REALTIME, &binding->lease_end);
+                    binding->lease_end.tv_sec += ntohl(lease);
                     break;
                 case OPT_SUBNET:
                     len_error |= (len != 4);
@@ -291,9 +293,9 @@ int dhcp_check_offer(
     }
     else
     {
-        if (o.binding.lease == 0)
+        if (timespec_diff(&o.binding.lease_end, &TIMESPEC_ZERO, NULL) == 0)
         {
-            o.binding.lease = 0xFFFFFFFF; /* infinity */
+            o.binding.lease_end = TIMESPEC_INFINITY;
         }
         /* DNS is not necessary */
         *offer = o;
@@ -659,9 +661,9 @@ int dhcp_ack_check(
     }
     else
     {
-        if (a.binding.lease == 0)
+        if (timespec_diff(&a.binding.lease_end, &TIMESPEC_ZERO, NULL) == 0)
         {
-            a.binding.lease = 0xFFFFFFFF; /* infinity */
+            a.binding.lease_end = TIMESPEC_INFINITY;
         }
         /* DNS is not necessary */
         *ack = a;

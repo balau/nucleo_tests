@@ -22,13 +22,14 @@
 
 #include <netinet/in.h>
 #include <stdint.h>
+#include <time.h>
 
 struct dhcp_binding {
     in_addr_t client; /**< New client IP address. */
     in_addr_t gateway; /**< Gateway IP address. */
     in_addr_t subnet; /**< Subnet IP mask. */
     in_addr_t dns_server; /**< DNS server address. */
-    uint32_t lease; /**< Client IP address lease time in seconds. */
+    struct timespec lease_end; /**< Client IP address lease end. */
 };
 
 /**
