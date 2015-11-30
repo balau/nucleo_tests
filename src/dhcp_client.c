@@ -512,6 +512,7 @@ int dhcp_socket_create(void)
     int sock;
     struct sockaddr_in client;
     int can_broadcast;
+    struct timespec timeout = {1, 0}; /* 1s */
 
     /* create UDP socket */
     sock = socket(AF_INET , SOCK_DGRAM , 0);
@@ -520,13 +521,24 @@ int dhcp_socket_create(void)
         return DHCP_ESYSCALL;
     }
 
-    /* TODO: set socket broadcast option */
     can_broadcast = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &can_broadcast, sizeof(int)) == -1)
     {
         close(sock);
         return DHCP_ESYSCALL;
     }
+
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timespec)) == -1)
+    {
+        close(sock);
+        return DHCP_ESYSCALL;
+    }
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(struct timespec)) == -1)
+    {
+        close(sock);
+        return DHCP_ESYSCALL;
+    }
+
 
     /* bind socket with 0.0.0.0:68 client address */
     client.sin_addr.s_addr = INADDR_ANY;
