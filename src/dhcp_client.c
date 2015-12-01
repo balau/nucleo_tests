@@ -19,6 +19,7 @@
 #include "dhcp_client.h"
 #include <netinet/in.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <string.h>
@@ -335,7 +336,6 @@ ssize_t dhcp_reply_recv(
     struct sockaddr_in server;
     socklen_t server_addr_len;
 
-    /* TODO: timeout */
     dhcp_message_size = recvfrom(
             sock,
             dhcp_message,
@@ -423,6 +423,22 @@ int dhcp_offer_recv(
 }
 
 static
+uint32_t gen_xid(const uint8_t *mac_addr)
+{
+    int i;
+    uint32_t xid = XID;
+
+    for (i = 0; i < MAC_ADDR_LEN; i++)
+    {
+        xid *= mac_addr[i];
+        xid += mac_addr[i];
+    }
+    xid ^= rand();
+
+    return xid;
+}
+
+static
 uint8_t *dhcp_prepare_bootp(
         uint8_t *dhcp_message,
         const uint8_t *mac_addr,
@@ -434,7 +450,7 @@ uint8_t *dhcp_prepare_bootp(
     dhcp_message[OFFSET_HTYPE] = 1;
     dhcp_message[OFFSET_HLEN] = 6;
     dhcp_message[OFFSET_HOPS] = 0;
-    *xid = XID; /* TODO: random */
+    *xid = gen_xid(mac_addr);
     setfield32(&dhcp_message[OFFSET_XID], *xid);
     setfield16(&dhcp_message[OFFSET_SECS], 0);
     setfield16(&dhcp_message[OFFSET_FLAGS], FLAG_BROADCAST);
