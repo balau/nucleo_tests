@@ -491,6 +491,8 @@ int dhcp_send(
 static
 uint8_t *dhcp_append_common_options(uint8_t *p_options, uint8_t type)
 {
+    const uint32_t lease_infinite = 0xFFFFFFFF;
+
     *p_options++ = OPT_DHCP_MESSAGE_TYPE;
     *p_options++ = 1;
     *p_options++ = type;
@@ -500,6 +502,11 @@ uint8_t *dhcp_append_common_options(uint8_t *p_options, uint8_t type)
     *p_options++ = OPT_ROUTER;
     *p_options++ = OPT_SUBNET;
     *p_options++ = OPT_DOMAIN_NAME_SERVER;
+
+    *p_options++ = OPT_IP_ADDRESS_LEASE_TIME;
+    *p_options++ = 4;
+    memcpy(p_options, &lease_infinite, 4);
+    p_options += 4;
 
     return p_options;
 }
