@@ -46,7 +46,8 @@ int loop(void)
     print_ipaddr("gateway", binding.gateway);
     print_ipaddr("subnet", binding.subnet);
     print_ipaddr("DNS", binding.dns_server);
-    printf("lease end: %d seconds\n", (int)binding.lease_end.tv_sec);
+    printf("lease T1: %d seconds\n", (int)binding.lease_t1.tv_sec);
+    printf("lease T2: %d seconds\n", (int)binding.lease_t2.tv_sec);
     w5100_write_regx(W5100_SIPR, &binding.client);
     w5100_write_regx(W5100_GAR, &binding.gateway);
     w5100_write_regx(W5100_SUBR, &binding.subnet);

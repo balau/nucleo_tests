@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 #include "timespec.h"
 
 //#define DHCP_DEBUG
@@ -39,7 +40,6 @@
 #endif
 
 /* A drawing of the format of BOOTP message is in RFC 1542 */
-
 
 #define MAC_ADDR_LEN 6
 
@@ -126,14 +126,12 @@
 
 struct offer
 {
-    in_addr_t server;
     struct dhcp_binding binding;
 };
 
 struct ack
 {
     uint8_t message_type;
-    in_addr_t server;
     struct dhcp_binding binding;
 };
 
@@ -188,8 +186,7 @@ int dhcp_parse_options(
         const uint8_t *p_options,
         size_t options_size,
         uint8_t *type,
-        struct dhcp_binding *binding,
-        in_addr_t *server
+        struct dhcp_binding *binding
         )
 {
     const uint8_t * const p_end = p_options + options_size;
@@ -222,13 +219,30 @@ int dhcp_parse_options(
                     break;
                 case OPT_SERVER_IDENTIFIER:
                     len_error |= (len != 4);
-                    memcpy(server, p_options, sizeof(in_addr_t));
+                    memcpy(&binding->dhcp_server, p_options, sizeof(in_addr_t));
                     break;
                 case OPT_IP_ADDRESS_LEASE_TIME:
                     len_error |= (len != 4);
                     memcpy(&lease, p_options, sizeof(uint32_t));
-                    clock_gettime(CLOCK_REALTIME, &binding->lease_end);
-                    binding->lease_end.tv_sec += ntohl(lease);
+                    lease = ntohl(lease);
+                    if (lease >= INT_MAX)
+                    {
+                        binding->lease_t1 = TIMESPEC_INFINITY;
+                        binding->lease_t2 = TIMESPEC_INFINITY;
+                    }
+                    else
+                    {
+                        struct timespec lease_t1;
+                        struct timespec lease_t2;
+
+                        lease_t1.tv_sec = lease/4;
+                        lease_t1.tv_nsec = 0;
+                        lease_t2.tv_sec = lease/2;
+                        lease_t2.tv_nsec = 0;
+                        clock_gettime(CLOCK_REALTIME, &binding->lease_t1);
+                        timespec_incr(&binding->lease_t1, &lease_t1);
+                        timespec_add(&binding->lease_t1, &lease_t2, &binding->lease_t2);
+                    }
                     break;
                 case OPT_SUBNET:
                     len_error |= (len != 4);
@@ -270,8 +284,7 @@ int dhcp_check_offer(
             p_options,
             options_size,
             &type,
-            &o.binding,
-            &o.server);
+            &o.binding);
 
     isoffer = (type == DHCPOFFER);
 
@@ -279,7 +292,7 @@ int dhcp_check_offer(
     {
         ret = DHCP_EOFFEREXPECTED;
     }
-    if (o.server == INADDR_ANY)
+    if (o.binding.dhcp_server == INADDR_ANY)
     {
         ret = DHCP_ENOSERVERID;
     }
@@ -293,9 +306,13 @@ int dhcp_check_offer(
     }
     else
     {
-        if (timespec_diff(&o.binding.lease_end, &TIMESPEC_ZERO, NULL) == 0)
+        if (timespec_diff(&o.binding.lease_t1, &TIMESPEC_ZERO, NULL) == 0)
         {
-            o.binding.lease_end = TIMESPEC_INFINITY;
+            o.binding.lease_t1 = TIMESPEC_INFINITY;
+        }
+        if (timespec_diff(&o.binding.lease_t2, &TIMESPEC_ZERO, NULL) == 0)
+        {
+            o.binding.lease_t2 = TIMESPEC_INFINITY;
         }
         /* DNS is not necessary */
         *offer = o;
@@ -607,7 +624,7 @@ int dhcp_request_send(
     
     *p_options++ = OPT_SERVER_IDENTIFIER;
     *p_options++ = 4;
-    memcpy(p_options, &offer->server, 4);
+    memcpy(p_options, &offer->binding.dhcp_server, 4);
     p_options += 4;
 
     *p_options++ = OPT_REQUESTED_IP_ADDRESS;
@@ -638,8 +655,7 @@ int dhcp_ack_check(
             p_options,
             options_size,
             &type,
-            &a.binding,
-            &a.server);
+            &a.binding);
 
     isoffer = (type == DHCPACK);
 
@@ -647,7 +663,7 @@ int dhcp_ack_check(
     {
         ret = DHCP_EOFFEREXPECTED;
     }
-    if (a.server == INADDR_ANY)
+    if (a.binding.dhcp_server == INADDR_ANY)
     {
         ret = DHCP_ENOSERVERID;
     }
@@ -661,9 +677,13 @@ int dhcp_ack_check(
     }
     else
     {
-        if (timespec_diff(&a.binding.lease_end, &TIMESPEC_ZERO, NULL) == 0)
+        if (timespec_diff(&a.binding.lease_t1, &TIMESPEC_ZERO, NULL) == 0)
         {
-            a.binding.lease_end = TIMESPEC_INFINITY;
+            a.binding.lease_t1 = TIMESPEC_INFINITY;
+        }
+        if (timespec_diff(&a.binding.lease_t2, &TIMESPEC_ZERO, NULL) == 0)
+        {
+            a.binding.lease_t2 = TIMESPEC_INFINITY;
         }
         /* DNS is not necessary */
         *ack = a;
@@ -788,6 +808,59 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
         *binding = ack.binding;
         ret = 0;
         break;
+    }
+    return ret;
+}
+
+static
+int dhcp_extend_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
+{
+    int ret;
+    struct offer offer;
+    struct ack ack;
+    int attempt;
+
+    for (attempt = 0; attempt < DHCP_REQUEST_RETRIES; attempt++)
+    {
+        offer.binding = *binding;
+        ret = dhcp_request(mac_addr, &offer, &ack);
+        if (ret != 0)
+        {
+            continue; /* retry */
+        }
+        *binding = ack.binding;
+        ret = 0;
+        break;
+    }
+    return ret;
+}
+
+
+int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
+{
+    int ret;
+    int expired;
+    int almost_expired;
+    struct timespec cur;
+
+    clock_gettime(CLOCK_REALTIME, &cur);
+    expired = timespec_diff(&cur, &binding->lease_t2, NULL) < 0;
+
+    if (!expired)
+    {
+        almost_expired = timespec_diff(&cur, &binding->lease_t1, NULL) < 0;
+    }
+    else
+    {
+        almost_expired = 1;
+    }
+    if (expired || almost_expired)
+    {
+        ret = dhcp_extend_lease(mac_addr, binding);
+    }
+    else
+    {
+        ret = DHCP_EAGAIN;
     }
     return ret;
 }

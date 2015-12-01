@@ -26,10 +26,12 @@
 
 struct dhcp_binding {
     in_addr_t client; /**< New client IP address. */
+    in_addr_t dhcp_server; /**< Server that issued the client IP address. */
     in_addr_t gateway; /**< Gateway IP address. */
     in_addr_t subnet; /**< Subnet IP mask. */
     in_addr_t dns_server; /**< DNS server address. */
-    struct timespec lease_end; /**< Client IP address lease end. */
+    struct timespec lease_t1; /**< Client IP address lease expiring. */
+    struct timespec lease_t2; /**< Client IP address lease end. */
 };
 
 /**
@@ -47,6 +49,19 @@ struct dhcp_binding {
 extern
 int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding);
 
+/**
+ * Check if the IP address lease is expiring and extends it.
+ *
+ * It might update the binding parameters.
+ *
+ * \param[in] mac_addr
+ * \param[inout] binding
+ *
+ * \return 0 on success, DHCP_EAGAIN if the lease is not expiring, otherwise an error code.
+ */
+extern
+int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding);
+
 #define DHCP_EINTERNAL (-1)
 #define DHCP_ESYSCALL (-2)
 #define DHCP_EYIADDR (-3)
@@ -54,7 +69,7 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding);
 #define DHCP_ENOSERVERID (-5)
 #define DHCP_ENOGATEWAY (-6)
 #define DHCP_ENOSUBNET (-7)
-
+#define DHCP_EAGAIN (-8)
 
 #endif /* DHCP_CLIENT_H */
 
