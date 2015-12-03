@@ -42,8 +42,6 @@
 
 /* A drawing of the format of BOOTP message is in RFC 1542 */
 
-#define MAC_ADDR_LEN 6
-
 /* OP */
 #define BOOTREQUEST 1
 #define BOOTREPLY   2
@@ -163,7 +161,7 @@ size_t dhcp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xi
     {
         return OFFSET_HTYPE;
     }
-    else if (msg[OFFSET_HLEN] != MAC_ADDR_LEN)
+    else if (msg[OFFSET_HLEN] != DHCP_MAC_ADDR_LEN)
     {
         return OFFSET_HLEN;
     }
@@ -171,7 +169,7 @@ size_t dhcp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xi
     {
         return OFFSET_XID;
     } 
-    else if (memcmp(&msg[OFFSET_CHADDR], mac_addr, MAC_ADDR_LEN) != 0)
+    else if (memcmp(&msg[OFFSET_CHADDR], mac_addr, DHCP_MAC_ADDR_LEN) != 0)
     {
         return OFFSET_CHADDR;
     }
@@ -428,7 +426,7 @@ uint32_t gen_xid(const uint8_t *mac_addr)
     int i;
     uint32_t xid = XID;
 
-    for (i = 0; i < MAC_ADDR_LEN; i++)
+    for (i = 0; i < DHCP_MAC_ADDR_LEN; i++)
     {
         xid *= mac_addr[i];
         xid += mac_addr[i];
@@ -448,7 +446,7 @@ uint8_t *dhcp_prepare_bootp(
     /* Construct BOOTP header */
     dhcp_message[OFFSET_OP] = BOOTREQUEST;
     dhcp_message[OFFSET_HTYPE] = 1;
-    dhcp_message[OFFSET_HLEN] = MAC_ADDR_LEN;
+    dhcp_message[OFFSET_HLEN] = DHCP_MAC_ADDR_LEN;
     dhcp_message[OFFSET_HOPS] = 0;
     *xid = gen_xid(mac_addr);
     setfield32(&dhcp_message[OFFSET_XID], *xid);
@@ -464,12 +462,12 @@ uint8_t *dhcp_prepare_bootp(
             LEN_CIADDR + LEN_YIADDR + LEN_SIADDR + LEN_GIADDR
             );
     /* MAC address */
-    memcpy(&dhcp_message[OFFSET_CHADDR], mac_addr, MAC_ADDR_LEN);
+    memcpy(&dhcp_message[OFFSET_CHADDR], mac_addr, DHCP_MAC_ADDR_LEN);
     /* last part of MAC address, sname and file set to 0 */
     memset(
-            &dhcp_message[OFFSET_CHADDR + MAC_ADDR_LEN],
+            &dhcp_message[OFFSET_CHADDR + DHCP_MAC_ADDR_LEN],
             0,
-            (LEN_CHADDR - MAC_ADDR_LEN) + LEN_SNAME + LEN_FILE
+            (LEN_CHADDR - DHCP_MAC_ADDR_LEN) + LEN_SNAME + LEN_FILE
             );
     setfield32(&dhcp_message[OFFSET_OPTIONS], MAGIC);
 
@@ -831,6 +829,7 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
             continue; /* retry */
         }
         *binding = ack.binding;
+        binding->state = DHCP_BOUND;
         ret = 0;
         break;
     }
@@ -889,4 +888,35 @@ int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
     }
     return ret;
 }
+
+
+void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding)
+{
+    memset(binding, 0, sizeof(struct dhcp_binding));
+    binding->state = DHCP_INIT;
+    memcpy(binding->mac_addr, mac_addr, DHCP_MAC_ADDR_LEN);
+}
+
+int dhcp_update(struct dhcp_binding *binding)
+{
+    int ret;
+
+    switch(binding->state)
+    {
+        case DHCP_INIT:
+            ret = dhcp_allocate(binding->mac_addr, binding);
+            break;
+        case DHCP_BOUND:
+            ret = dhcp_refresh_lease(binding->mac_addr, binding);
+        default:
+            ret = DHCP_EINTERNAL;
+            break;
+    }
+
+    return ret;
+}
+
+
+
+
 

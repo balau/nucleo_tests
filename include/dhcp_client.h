@@ -24,7 +24,22 @@
 #include <stdint.h>
 #include <time.h>
 
+#define DHCP_MAC_ADDR_LEN 6
+
+enum dhcp_state {
+    DHCP_INIT,
+    DHCP_SELECTING,
+    DHCP_REQUESTING,
+    DHCP_BOUND,
+    DHCP_INIT_REBOOT,
+    DHCP_REBOOTING,
+    DHCP_RENEWING,
+    DHCP_REBINDING,
+};
+
 struct dhcp_binding {
+    enum dhcp_state state; /**< DHCP state. */
+    uint8_t mac_addr[DHCP_MAC_ADDR_LEN]; /* Client MAC address. */
     in_addr_t client; /**< New client IP address. */
     in_addr_t dhcp_server; /**< Server that issued the client IP address. */
     in_addr_t gateway; /**< Gateway IP address. */
@@ -33,6 +48,12 @@ struct dhcp_binding {
     struct timespec lease_t1; /**< Client IP address lease expiring. */
     struct timespec lease_t2; /**< Client IP address lease end. */
 };
+
+extern
+void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding);
+
+extern
+int dhcp_update(struct dhcp_binding *binding);
 
 /**
  * Get a new IP address from DHCP server.
