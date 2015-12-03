@@ -163,7 +163,7 @@ size_t dhcp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xi
     {
         return OFFSET_HTYPE;
     }
-    else if (msg[OFFSET_HLEN] != 6)
+    else if (msg[OFFSET_HLEN] != MAC_ADDR_LEN)
     {
         return OFFSET_HLEN;
     }
@@ -448,7 +448,7 @@ uint8_t *dhcp_prepare_bootp(
     /* Construct BOOTP header */
     dhcp_message[OFFSET_OP] = BOOTREQUEST;
     dhcp_message[OFFSET_HTYPE] = 1;
-    dhcp_message[OFFSET_HLEN] = 6;
+    dhcp_message[OFFSET_HLEN] = MAC_ADDR_LEN;
     dhcp_message[OFFSET_HOPS] = 0;
     *xid = gen_xid(mac_addr);
     setfield32(&dhcp_message[OFFSET_XID], *xid);
@@ -622,6 +622,7 @@ int dhcp_discover(
         ret = dhcp_offer_recv(sock, mac_addr, xid, offer);
         if (ret != 0)
         {
+            /* TODO: random backoff increasing with attempt */
             continue;/* retry */
         }
         break;
@@ -801,6 +802,7 @@ int dhcp_request(
         ret = dhcp_ack_recv(sock, mac_addr, xid, offer, ack);
         if (ret != 0)
         {
+            /* TODO: random backoff increasing with attempt */
             continue;/* retry */
         }
         break;
