@@ -41,7 +41,7 @@ void timespec_incr(struct timespec *x, const struct timespec *step)
     timespec_add(&tmp, step, x);
 }
 
-int timespec_diff(const struct timespec *from, const struct timespec *to, struct timespec *diff)
+int timespec_diff(const struct timespec *to, const struct timespec *from, struct timespec *diff)
 {
     long diff_nsec;
     long diff_sec;

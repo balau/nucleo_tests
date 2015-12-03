@@ -41,7 +41,7 @@ int clock_nanosleep(
 
     while (ret == 0)
     {
-        if (timespec_diff(&tcurrent, rqtp, NULL) <= 0)
+        if (timespec_diff(rqtp, &tcurrent, NULL) <= 0)
         {
             if (rmtp != NULL)
             {

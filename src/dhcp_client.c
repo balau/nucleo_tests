@@ -307,11 +307,11 @@ int dhcp_check_offer(
     }
     else
     {
-        if (timespec_diff(&o.binding.lease_t1, &TIMESPEC_ZERO, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &o.binding.lease_t1, NULL) == 0)
         {
             o.binding.lease_t1 = TIMESPEC_INFINITY;
         }
-        if (timespec_diff(&o.binding.lease_t2, &TIMESPEC_ZERO, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &o.binding.lease_t2, NULL) == 0)
         {
             o.binding.lease_t2 = TIMESPEC_INFINITY;
         }
@@ -701,11 +701,11 @@ int dhcp_ack_check(
     }
     else
     {
-        if (timespec_diff(&a.binding.lease_t1, &TIMESPEC_ZERO, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &a.binding.lease_t1, NULL) == 0)
         {
             a.binding.lease_t1 = TIMESPEC_INFINITY;
         }
-        if (timespec_diff(&a.binding.lease_t2, &TIMESPEC_ZERO, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &a.binding.lease_t2, NULL) == 0)
         {
             a.binding.lease_t2 = TIMESPEC_INFINITY;
         }
@@ -869,11 +869,11 @@ int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
     struct timespec cur;
 
     clock_gettime(CLOCK_REALTIME, &cur);
-    expired = timespec_diff(&cur, &binding->lease_t2, NULL) < 0;
+    expired = timespec_diff(&binding->lease_t2, &cur, NULL) < 0;
 
     if (!expired)
     {
-        almost_expired = timespec_diff(&cur, &binding->lease_t1, NULL) < 0;
+        almost_expired = timespec_diff(&binding->lease_t1, &cur, NULL) < 0;
     }
     else
     {

@@ -39,7 +39,7 @@ extern
 void timespec_incr(struct timespec *x, const struct timespec *step);
 
 extern
-int timespec_diff(const struct timespec *from, const struct timespec *to, struct timespec *diff);
+int timespec_diff(const struct timespec *to, const struct timespec *from, struct timespec *diff);
 
 extern
 const struct timespec TIMESPEC_ZERO;

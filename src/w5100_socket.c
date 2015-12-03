@@ -742,7 +742,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 static
 void timeout_init(const struct timespec *timeout, struct timeout_manager *tom)
 {
-    tom->has_timeout = (timespec_diff(timeout, &TIMESPEC_ZERO, NULL) != 0);
+    tom->has_timeout = (timespec_diff(&TIMESPEC_ZERO, timeout, NULL) != 0);
 
     if (tom->has_timeout)
     {
@@ -760,7 +760,7 @@ int timeout_ended(const struct timeout_manager *tom)
     if (tom->has_timeout)
     {
         clock_gettime(CLOCK_MONOTONIC, &cur);
-        ret = (timespec_diff(&cur, &tom->end, NULL) < 0);
+        ret = (timespec_diff(&tom->end, &cur, NULL) < 0);
         if (ret)
         {
             errno = EAGAIN;
