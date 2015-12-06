@@ -123,17 +123,6 @@
 #define DHCP_MESSAGE_LEN_MAX (DHCP_MESSAGE_HEADER_LEN + DHCP_OPTIONS_LEN_MAX)
 #define DHCP_MESSAGE_LEN_MIN (DHCP_MESSAGE_HEADER_LEN + LEN_MAGIC)
 
-struct offer
-{
-    struct dhcp_binding binding;
-};
-
-struct ack
-{
-    uint8_t message_type;
-    struct dhcp_binding binding;
-};
-
 static
 uint8_t *setfield16(uint8_t *field, uint16_t val)
 {
@@ -270,20 +259,20 @@ static
 int dhcp_check_offer(
         const uint8_t *p_options,
         size_t options_size,
-        struct offer *offer)
+        struct dhcp_binding *offer)
 {
     int ret;
     int isoffer;
-    struct offer o;
+    struct dhcp_binding o;
     uint8_t type;
 
-    memset(&o, 0, sizeof(struct offer)); /* INADDR_ANY */
+    memset(&o, 0, sizeof(struct dhcp_binding)); /* INADDR_ANY */
 
     dhcp_parse_options(
             p_options,
             options_size,
             &type,
-            &o.binding);
+            &o);
 
     isoffer = (type == DHCPOFFER);
 
@@ -291,27 +280,27 @@ int dhcp_check_offer(
     {
         ret = DHCP_EOFFEREXPECTED;
     }
-    if (o.binding.dhcp_server == INADDR_ANY)
+    if (o.dhcp_server == INADDR_ANY)
     {
         ret = DHCP_ENOSERVERID;
     }
-    else if (o.binding.gateway == INADDR_ANY)
+    else if (o.gateway == INADDR_ANY)
     {
         ret = DHCP_ENOGATEWAY;
     }
-    else if (o.binding.subnet == INADDR_ANY)
+    else if (o.subnet == INADDR_ANY)
     {
         ret = DHCP_ENOSUBNET;
     }
     else
     {
-        if (timespec_diff(&TIMESPEC_ZERO, &o.binding.lease_t1, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &o.lease_t1, NULL) == 0)
         {
-            o.binding.lease_t1 = TIMESPEC_INFINITY;
+            o.lease_t1 = TIMESPEC_INFINITY;
         }
-        if (timespec_diff(&TIMESPEC_ZERO, &o.binding.lease_t2, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &o.lease_t2, NULL) == 0)
         {
-            o.binding.lease_t2 = TIMESPEC_INFINITY;
+            o.lease_t2 = TIMESPEC_INFINITY;
         }
         /* DNS is not necessary */
         *offer = o;
@@ -370,7 +359,7 @@ int dhcp_offer_recv(
         int sock,
         const uint8_t *mac_addr,
         uint32_t xid,
-        struct offer *offer)
+        struct dhcp_binding *offer)
 {
     int ret;
 
@@ -411,7 +400,7 @@ int dhcp_offer_recv(
                         offer);
                 if (ret == 0)
                 {
-                    offer->binding.client = yiaddr;
+                    offer->client = yiaddr;
                 }
             }
             break;
@@ -596,7 +585,7 @@ int dhcp_socket_create(void)
 static
 int dhcp_discover(
         const uint8_t *mac_addr,
-        struct offer *offer)
+        struct dhcp_binding *offer)
 {
     int attempt;
     int ret;
@@ -633,7 +622,7 @@ static
 int dhcp_request_send(
         int sock,
         const uint8_t *mac_addr,
-        const struct offer *offer,
+        const struct dhcp_binding *offer,
         uint32_t *xid)
 {
     uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
@@ -646,12 +635,12 @@ int dhcp_request_send(
     
     *p_options++ = OPT_SERVER_IDENTIFIER;
     *p_options++ = 4;
-    memcpy(p_options, &offer->binding.dhcp_server, 4);
+    memcpy(p_options, &offer->dhcp_server, 4);
     p_options += 4;
 
     *p_options++ = OPT_REQUESTED_IP_ADDRESS;
     *p_options++ = 4;
-    memcpy(p_options, &offer->binding.client, 4);
+    memcpy(p_options, &offer->client, 4);
     p_options += 4;
 
     *p_options++ = OPT_END;
@@ -664,20 +653,20 @@ static
 int dhcp_ack_check(
         const uint8_t *p_options,
         size_t options_size,
-        struct ack *ack)
+        struct dhcp_binding *ack)
 {
     int ret;
     int isoffer;
-    struct ack a;
+    struct dhcp_binding a;
     uint8_t type;
 
-    memset(&a, 0, sizeof(struct offer)); /* INADDR_ANY */
+    memset(&a, 0, sizeof(struct dhcp_binding)); /* INADDR_ANY */
 
     dhcp_parse_options(
             p_options,
             options_size,
             &type,
-            &a.binding);
+            &a);
 
     isoffer = (type == DHCPACK);
 
@@ -685,27 +674,27 @@ int dhcp_ack_check(
     {
         ret = DHCP_EOFFEREXPECTED;
     }
-    if (a.binding.dhcp_server == INADDR_ANY)
+    if (a.dhcp_server == INADDR_ANY)
     {
         ret = DHCP_ENOSERVERID;
     }
-    else if (a.binding.gateway == INADDR_ANY)
+    else if (a.gateway == INADDR_ANY)
     {
         ret = DHCP_ENOGATEWAY;
     }
-    else if (a.binding.subnet == INADDR_ANY)
+    else if (a.subnet == INADDR_ANY)
     {
         ret = DHCP_ENOSUBNET;
     }
     else
     {
-        if (timespec_diff(&TIMESPEC_ZERO, &a.binding.lease_t1, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &a.lease_t1, NULL) == 0)
         {
-            a.binding.lease_t1 = TIMESPEC_INFINITY;
+            a.lease_t1 = TIMESPEC_INFINITY;
         }
-        if (timespec_diff(&TIMESPEC_ZERO, &a.binding.lease_t2, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &a.lease_t2, NULL) == 0)
         {
-            a.binding.lease_t2 = TIMESPEC_INFINITY;
+            a.lease_t2 = TIMESPEC_INFINITY;
         }
         /* DNS is not necessary */
         *ack = a;
@@ -720,8 +709,8 @@ int dhcp_ack_recv(
         int sock,
         const uint8_t *mac_addr,
         uint32_t xid,
-        const struct offer *offer,
-        struct ack *ack)
+        const struct dhcp_binding *offer,
+        struct dhcp_binding *ack)
 {
     int ret;
 
@@ -763,7 +752,7 @@ int dhcp_ack_recv(
                 (void)offer; /* TODO: check that ack has same params */
                 if (ret == 0)
                 {
-                    ack->binding.client = yiaddr;
+                    ack->client = yiaddr;
                 }
             }
             break;
@@ -775,8 +764,8 @@ int dhcp_ack_recv(
 static
 int dhcp_request(
         const uint8_t *mac_addr,
-        const struct offer *offer,
-        struct ack *ack)
+        const struct dhcp_binding *offer,
+        struct dhcp_binding *ack)
 {
     int attempt;
     int ret;
@@ -812,8 +801,8 @@ int dhcp_request(
 int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
 {
     int ret;
-    struct offer offer;
-    struct ack ack;
+    struct dhcp_binding offer;
+    struct dhcp_binding ack;
     int attempt;
 
     for (attempt = 0; attempt < DHCP_ALLOCATE_RETRIES; attempt++)
@@ -828,7 +817,7 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
         {
             continue; /* retry */
         }
-        *binding = ack.binding;
+        *binding = ack;
         binding->state = DHCP_BOUND;
         ret = 0;
         break;
@@ -840,19 +829,19 @@ static
 int dhcp_extend_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
 {
     int ret;
-    struct offer offer;
-    struct ack ack;
+    struct dhcp_binding offer;
+    struct dhcp_binding ack;
     int attempt;
 
     for (attempt = 0; attempt < DHCP_REQUEST_RETRIES; attempt++)
     {
-        offer.binding = *binding;
+        offer = *binding;
         ret = dhcp_request(mac_addr, &offer, &ack);
         if (ret != 0)
         {
             continue; /* retry */
         }
-        *binding = ack.binding;
+        *binding = offer;
         ret = 0;
         break;
     }
