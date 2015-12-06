@@ -28,9 +28,6 @@ static
 int initialized = 0;
 
 static
-uint8_t mac_addr[6];
-
-static
 void configure(void)
 {
     w5100_write_regx(W5100_SIPR, &binding.client);
@@ -50,7 +47,7 @@ time_t w5100_dhcp(void)
     if (!initialized)
     {
 
-        w5100_read_regx(W5100_SHAR, mac_addr);
+        w5100_read_regx(W5100_SHAR, binding.mac_addr);
 
         /* TODO: check if we already have a preferred IP address */
         //w5100_read_reg(W5100_SIPR, &binding.client);
@@ -58,7 +55,7 @@ time_t w5100_dhcp(void)
         //w5100_read_reg(W5100_SUBR, &binding.subnet);
         do 
         {
-            ret = dhcp_allocate(mac_addr, &binding);
+            ret = dhcp_allocate(&binding);
         } while(ret != 0);
         initialized = 1;
     }
@@ -66,7 +63,7 @@ time_t w5100_dhcp(void)
     {
         do 
         {
-            ret = dhcp_refresh_lease(mac_addr, &binding);
+            ret = dhcp_refresh_lease(&binding);
             if (ret == DHCP_EAGAIN)
             {
                 break;

@@ -20,7 +20,6 @@ void print_ipaddr(const char *name, in_addr_t addr)
 static
 int loop(void)
 {
-    uint8_t mac_addr[8];
     struct dhcp_binding binding;
     int ret;
 
@@ -28,8 +27,8 @@ int loop(void)
     getchar();
     printf("\n");
 
-    w5100_read_regx(W5100_SHAR, mac_addr);
-    ret = dhcp_allocate(mac_addr, &binding);
+    w5100_read_regx(W5100_SHAR, binding.mac_addr);
+    ret = dhcp_allocate(&binding);
     if (ret != 0)
     {
         if (ret == DHCP_ESYSCALL)

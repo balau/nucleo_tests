@@ -68,7 +68,7 @@ int dhcp_update(struct dhcp_binding *binding);
  * \return 0 on success, otherwise an error code.
  */
 extern
-int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding);
+int dhcp_allocate(struct dhcp_binding *binding);
 
 /**
  * Check if the IP address lease is expiring and extends it.
@@ -81,7 +81,7 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding);
  * \return 0 on success, DHCP_EAGAIN if the lease is not expiring, otherwise an error code.
  */
 extern
-int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding);
+int dhcp_refresh_lease(struct dhcp_binding *binding);
 
 #define DHCP_EINTERNAL (-1)
 #define DHCP_ESYSCALL (-2)

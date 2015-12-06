@@ -621,14 +621,13 @@ int dhcp_discover(
 static
 int dhcp_request_send(
         int sock,
-        const uint8_t *mac_addr,
         const struct dhcp_binding *offer,
         uint32_t *xid)
 {
     uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
     uint8_t *p_options;
     
-    p_options = dhcp_prepare_bootp(dhcp_message, mac_addr, xid);
+    p_options = dhcp_prepare_bootp(dhcp_message, offer->mac_addr, xid);
 
     /* Append DHCP options */
     p_options = dhcp_append_common_options(p_options, DHCPREQUEST);
@@ -707,7 +706,6 @@ int dhcp_ack_check(
 static
 int dhcp_ack_recv(
         int sock,
-        const uint8_t *mac_addr,
         uint32_t xid,
         const struct dhcp_binding *offer,
         struct dhcp_binding *ack)
@@ -722,7 +720,7 @@ int dhcp_ack_recv(
         /* TODO: timeout */
         dhcp_message_size = dhcp_reply_recv(
                 sock,
-                mac_addr,
+                offer->mac_addr,
                 xid,
                 dhcp_message);
         if (dhcp_message_size == 0)
@@ -763,7 +761,6 @@ int dhcp_ack_recv(
 
 static
 int dhcp_request(
-        const uint8_t *mac_addr,
         const struct dhcp_binding *offer,
         struct dhcp_binding *ack)
 {
@@ -781,12 +778,12 @@ int dhcp_request(
     {
         uint32_t xid;
 
-        ret = dhcp_request_send(sock, mac_addr, offer, &xid);
+        ret = dhcp_request_send(sock, offer, &xid);
         if (ret != 0)
         {
             continue;/* retry */
         }
-        ret = dhcp_ack_recv(sock, mac_addr, xid, offer, ack);
+        ret = dhcp_ack_recv(sock, xid, offer, ack);
         if (ret != 0)
         {
             /* TODO: random backoff increasing with attempt */
@@ -798,7 +795,7 @@ int dhcp_request(
     return ret;
 }
 
-int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
+int dhcp_allocate(struct dhcp_binding *binding)
 {
     int ret;
     struct dhcp_binding offer;
@@ -807,12 +804,12 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
 
     for (attempt = 0; attempt < DHCP_ALLOCATE_RETRIES; attempt++)
     {
-        ret = dhcp_discover(mac_addr, &offer);
+        ret = dhcp_discover(binding->mac_addr, &offer);
         if (ret != 0)
         {
             continue; /* retry */
         }
-        ret = dhcp_request(mac_addr, &offer, &ack);
+        ret = dhcp_request(&offer, &ack);
         if (ret != 0)
         {
             continue; /* retry */
@@ -826,7 +823,7 @@ int dhcp_allocate(const uint8_t *mac_addr, struct dhcp_binding *binding)
 }
 
 static
-int dhcp_extend_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
+int dhcp_extend_lease(struct dhcp_binding *binding)
 {
     int ret;
     struct dhcp_binding offer;
@@ -836,12 +833,12 @@ int dhcp_extend_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
     for (attempt = 0; attempt < DHCP_REQUEST_RETRIES; attempt++)
     {
         offer = *binding;
-        ret = dhcp_request(mac_addr, &offer, &ack);
+        ret = dhcp_request(&offer, &ack);
         if (ret != 0)
         {
             continue; /* retry */
         }
-        *binding = offer;
+        *binding = ack;
         ret = 0;
         break;
     }
@@ -849,7 +846,7 @@ int dhcp_extend_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
 }
 
 
-int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
+int dhcp_refresh_lease(struct dhcp_binding *binding)
 {
     int ret;
     int expired;
@@ -869,7 +866,7 @@ int dhcp_refresh_lease(const uint8_t *mac_addr, struct dhcp_binding *binding)
     }
     if (expired || almost_expired)
     {
-        ret = dhcp_extend_lease(mac_addr, binding);
+        ret = dhcp_extend_lease(binding);
     }
     else
     {
@@ -893,10 +890,10 @@ int dhcp_update(struct dhcp_binding *binding)
     switch(binding->state)
     {
         case DHCP_INIT:
-            ret = dhcp_allocate(binding->mac_addr, binding);
+            ret = dhcp_allocate(binding);
             break;
         case DHCP_BOUND:
-            ret = dhcp_refresh_lease(binding->mac_addr, binding);
+            ret = dhcp_refresh_lease(binding);
         default:
             ret = DHCP_EINTERNAL;
             break;
