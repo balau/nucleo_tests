@@ -22,7 +22,7 @@ int loop(void)
 {
     struct dhcp_binding binding;
     uint8_t mac_addr[6];
-    int ret;
+    time_t next;
 
     printf("Press any key to continue...");
     getchar();
@@ -31,28 +31,14 @@ int loop(void)
     w5100_read_regx(W5100_SHAR, mac_addr);
     dhcp_init(mac_addr, &binding);
 
-    ret = dhcp_bind(&binding);
-    if (ret != 0)
-    {
-        if (ret == DHCP_ESYSCALL)
-        {
-            perror("dhcp_bind");
-        }
-        else
-        {
-            fprintf(stderr, "error: dhcp_allocate: %d\n", ret);
-        }
-        return 1;
-    }
+    next = dhcp_bind(&binding);
     print_ipaddr("new client address", binding.client);
     print_ipaddr("gateway", binding.gateway);
     print_ipaddr("subnet", binding.subnet);
     print_ipaddr("DNS", binding.dns_server);
     printf("lease T1: %d seconds\n", (int)binding.lease_t1.tv_sec);
     printf("lease T2: %d seconds\n", (int)binding.lease_t2.tv_sec);
-    w5100_write_regx(W5100_SIPR, &binding.client);
-    w5100_write_regx(W5100_GAR, &binding.gateway);
-    w5100_write_regx(W5100_SUBR, &binding.subnet);
+    printf("next call should be in %d seconds\n", (int)next);
 
     return 0;
 }
