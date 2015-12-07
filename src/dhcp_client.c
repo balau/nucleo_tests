@@ -752,11 +752,15 @@ void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding)
 
 int dhcp_isbound(struct dhcp_binding *binding)
 {
-    time_t next;
+    int isbound;
 
-    next = get_dhcp_next_event(binding);
+    isbound = (
+            (binding->state == DHCP_BOUND) ||
+            (binding->state == DHCP_RENEWING) ||
+            (binding->state == DHCP_REBINDING)
+            );
 
-    return (binding->state == DHCP_BOUND) && (next > 0);
+    return isbound;
 }
 
 time_t dhcp_step(struct dhcp_binding *binding)
