@@ -25,16 +25,32 @@
 /**
  * Manage DHCP.
  *
- * \return the CLOCK_REALTIME time at which it should be called again.
+ * \retval < 0 an error occurred.
+ * \retval == 0 should be re-called as soon as possible.
+ * \retval > 0 the number of seconds after which it should be called again.
  */
 extern
 time_t w5100_dhcp(void);
+
+/**
+ * Manage DHCP and ensure that interface is bound to an address on exit.
+ *
+ * \return the number of seconds after which it should be called again.
+ */
+extern
+time_t w5100_dhcp_bind(void);
 
 /**
  * Get DNS server retrieved by DHCP
  */
 extern
 in_addr_t w5100_getdns(void);
+
+/*
+ * Get whether the interface has an IP address bound with a DHCP server.
+ */
+extern
+int w5100_dhcp_isbound(void);
 
 #endif /* W5100_DHCP */
 

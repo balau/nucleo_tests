@@ -24,15 +24,33 @@
 static
 struct dhcp_binding binding;
 
+static struct config {
+    in_addr_t client;
+    in_addr_t gateway;
+    in_addr_t subnet;
+} config;
+
 static
 int initialized = 0;
 
 static
 void configure(void)
 {
-    w5100_write_regx(W5100_SIPR, &binding.client);
-    w5100_write_regx(W5100_GAR, &binding.gateway);
-    w5100_write_regx(W5100_SUBR, &binding.subnet);
+    if (binding.client != config.client)
+    {
+        w5100_write_regx(W5100_SIPR, &binding.client);
+        config.client = binding.client;
+    }
+    if (binding.gateway != config.gateway)
+    {
+        w5100_write_regx(W5100_GAR, &binding.gateway);
+        config.gateway = binding.gateway;
+    }
+    if (binding.subnet != config.subnet)
+    {
+        w5100_write_regx(W5100_SUBR, &binding.subnet);
+        config.subnet = binding.subnet;
+    }
 }
 
 in_addr_t w5100_getdns(void)
@@ -40,9 +58,14 @@ in_addr_t w5100_getdns(void)
     return binding.dns_server;
 }
 
+int w5100_dhcp_isbound(void)
+{
+    return dhcp_isbound(&binding);
+}
+
 time_t w5100_dhcp(void)
 {
-    int ret;
+    time_t next;
 
     if (!initialized)
     {
@@ -51,21 +74,27 @@ time_t w5100_dhcp(void)
         w5100_read_regx(W5100_SHAR, mac_addr);
 
         /* TODO: check if we already have a preferred IP address */
-        //w5100_read_reg(W5100_SIPR, &binding.client);
-        //w5100_read_reg(W5100_GAR, &binding.gateway);
-        //w5100_read_reg(W5100_SUBR, &binding.subnet);
         dhcp_init(mac_addr, &binding);
         initialized = 1;
     }
-    while(1)
+    next = dhcp_step(&binding);
+
+    if (w5100_dhcp_isbound())
     {
-        ret = dhcp_update(&binding);
-        if (ret > 0 && binding.state == DHCP_BOUND)
-        {
-            configure();
-            break;
-        }
+        configure();
     }
+    return next;
+}
+
+time_t w5100_dhcp_bind(void)
+{
+    time_t ret;
+
+    do
+    {
+        ret = w5100_dhcp();
+    } while(!w5100_dhcp_isbound());
+
     return ret;
 }
 
