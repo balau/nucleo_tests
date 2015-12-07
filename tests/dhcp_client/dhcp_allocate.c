@@ -21,13 +21,16 @@ static
 int loop(void)
 {
     struct dhcp_binding binding;
+    uint8_t mac_addr[6];
     int ret;
 
     printf("Press any key to continue...");
     getchar();
     printf("\n");
 
-    w5100_read_regx(W5100_SHAR, binding.mac_addr);
+    w5100_read_regx(W5100_SHAR, mac_addr);
+    dhcp_init(mac_addr, &binding);
+
     ret = dhcp_allocate(&binding);
     if (ret != 0)
     {

@@ -26,6 +26,7 @@ int loop(void)
     w5100_read_regx(W5100_SIPR, &ip);
     print_ipaddr("IP", ip);
     print_ipaddr("DNS", w5100_getdns());
+    printf("next: %d\n", (int)next);
     sleep(5);
 
     return 0;
