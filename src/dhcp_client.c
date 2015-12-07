@@ -433,13 +433,26 @@ int send_bootp_request(int sock, struct dhcp_binding *binding)
     uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
     uint8_t *p_options;
     uint8_t type;
+    uint32_t ciaddr;
     
     if (binding->state != DHCP_SELECTING)
     {
         binding->xid = gen_xid(binding->mac_addr);
     }
     setfield32(&dhcp_message[OFFSET_XID], binding->xid);
-    setfield32(&dhcp_message[OFFSET_CIADDR], binding->client);
+    if (
+            (binding->state == DHCP_BOUND) ||
+            (binding->state == DHCP_RENEWING) ||
+            (binding->state == DHCP_REBINDING)
+       )
+    {
+        ciaddr = binding->client;
+    }
+    else
+    {
+        ciaddr = 0;
+    }
+    setfield32(&dhcp_message[OFFSET_CIADDR], ciaddr);
     memcpy(&dhcp_message[OFFSET_CHADDR], binding->mac_addr, DHCP_MAC_ADDR_LEN);
 
     p_options = fill_bootp_request(dhcp_message);
