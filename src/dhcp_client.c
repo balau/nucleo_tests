@@ -524,7 +524,7 @@ int recv_bootp_reply(int sock, struct dhcp_binding *binding)
         {
             in_addr_t yiaddr;
             struct dhcp_binding options;
-            uint8_t type;
+            uint8_t type = 0; /* default no type */
             int len_error;
 
             memset(&options, 0, sizeof(struct dhcp_binding));
