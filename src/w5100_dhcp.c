@@ -46,35 +46,26 @@ time_t w5100_dhcp(void)
 
     if (!initialized)
     {
+        uint8_t mac_addr[6];
 
-        w5100_read_regx(W5100_SHAR, binding.mac_addr);
+        w5100_read_regx(W5100_SHAR, mac_addr);
 
         /* TODO: check if we already have a preferred IP address */
         //w5100_read_reg(W5100_SIPR, &binding.client);
         //w5100_read_reg(W5100_GAR, &binding.gateway);
         //w5100_read_reg(W5100_SUBR, &binding.subnet);
-        do 
-        {
-            ret = dhcp_allocate(&binding);
-        } while(ret != 0);
+        dhcp_init(mac_addr, &binding);
         initialized = 1;
     }
-    else
+    while(1)
     {
-        do 
+        ret = dhcp_update(&binding);
+        if (ret > 0 && binding.state == DHCP_BOUND)
         {
-            ret = dhcp_refresh_lease(&binding);
-            if (ret == DHCP_EAGAIN)
-            {
-                break;
-            }
-        } while((ret != 0) && (ret != DHCP_EAGAIN));
+            configure();
+            break;
+        }
     }
-    if (ret == 0)
-    {
-        configure();
-    }
-
-    return binding.lease_t1.tv_sec;
+    return ret;
 }
 
