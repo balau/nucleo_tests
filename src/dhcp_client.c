@@ -730,30 +730,6 @@ time_t get_dhcp_next_event(const struct dhcp_binding *binding)
     return next;
 }
 
-int dhcp_allocate(struct dhcp_binding *binding)
-{
-    int ret = 0;
-    while (binding->state != DHCP_BOUND)
-    {
-        ret = bootp_transaction(binding);
-        if (ret != 0)
-        {
-            break;
-        }
-    }
-    return ret;
-}
-
-int dhcp_refresh_lease(struct dhcp_binding *binding)
-{
-    int ret = 0;
-    if (get_dhcp_next_event(binding) == 0)
-    {
-        ret = bootp_transaction(binding);
-    }
-    return ret;
-}
-
 void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding)
 {
     memset(binding, 0, sizeof(struct dhcp_binding));
@@ -761,28 +737,47 @@ void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding)
     memcpy(binding->mac_addr, mac_addr, DHCP_MAC_ADDR_LEN);
 }
 
-int dhcp_update(struct dhcp_binding *binding)
+int dhcp_isbound(struct dhcp_binding *binding)
 {
-    int ret;
+    time_t next;
+
+    next = get_dhcp_next_event(binding);
+
+    return (binding->state == DHCP_BOUND) && (next > 0);
+}
+
+time_t dhcp_step(struct dhcp_binding *binding)
+{
+    time_t next;
+
+    next = get_dhcp_next_event(binding);
+    if (next == 0)
+    {
+        int ret;
+
+        ret = bootp_transaction(binding);
+        if (ret != 0)
+        {
+            next = (time_t)ret;
+        }
+        else
+        {
+            next = get_dhcp_next_event(binding);
+        }
+    }
+
+    return next;
+}
+
+time_t dhcp_bind(struct dhcp_binding *binding)
+{
     time_t next;
 
     do
     {
-        next = get_dhcp_next_event(binding);
-        if (next == 0)
-        {
-            ret = bootp_transaction(binding);
-            if (ret != 0)
-            {
-                break;
-            }
-        }
-        else
-        {
-            ret = (int)next;
-        }
-    } while(next == 0);
+        next = dhcp_step(binding);
+    } while(!dhcp_isbound(binding));
 
-    return ret;
+    return next;
 }
 

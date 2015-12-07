@@ -50,39 +50,49 @@ struct dhcp_binding {
     struct timespec lease_t2; /**< Client IP address lease end. */
 };
 
-extern
-void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding);
-
-extern
-int dhcp_update(struct dhcp_binding *binding);
-
 /**
- * Get a new IP address from DHCP server.
+ * Initialize DHCP client library.
  *
- * As a DCHP client, allocate a new network address by communicating
- * with a DHCP server as for RFC 2131. Retrieve also network parameters
- * such as gateway address.
+ * Other functions shall not be called before this.
  *
  * \param[in] mac_addr
  * \param[out] binding
- *
- * \return 0 on success, otherwise an error code.
  */
 extern
-int dhcp_allocate(struct dhcp_binding *binding);
+void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding);
 
 /**
- * Check if the IP address lease is expiring and extends it.
+ * Perform a step of DHCP procedure.
  *
- * It might update the binding parameters.
- *
- * \param[in] mac_addr
  * \param[inout] binding
  *
- * \return 0 on success, DHCP_EAGAIN if the lease is not expiring, otherwise an error code.
+ * \retval < 0 an error occurred.
+ * \retval == 0 should be re-called as soon as possible.
+ * \retval > 0 the number of seconds after which it should be called again.
  */
 extern
-int dhcp_refresh_lease(struct dhcp_binding *binding);
+time_t dhcp_step(struct dhcp_binding *binding);
+
+/**
+ * Get whether client is bound to an address with a DHCP server.
+ *
+ * \param[inout] binding
+ *
+ * \retval nonzero the interface is bound to an address.
+ * \retval zero the interface is not bound to an address.
+ */
+extern
+int dhcp_isbound(struct dhcp_binding *binding);
+
+/**
+ * Perform DHCP procedure blocking until client is bound to an address.
+ *
+ * \param[inout] binding
+ *
+ * \return the number of seconds after which it should be called again.
+ */
+extern
+time_t dhcp_bind(struct dhcp_binding *binding);
 
 #define DHCP_EINTERNAL (-1)
 #define DHCP_ESYSCALL (-2)
