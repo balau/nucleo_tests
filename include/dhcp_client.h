@@ -45,6 +45,7 @@ struct dhcp_binding {
     in_addr_t gateway; /**< Gateway IP address. */
     in_addr_t subnet; /**< Subnet IP mask. */
     in_addr_t dns_server; /**< DNS server address. */
+    uint32_t xid; /**< Transaction ID */
     struct timespec lease_t1; /**< Client IP address lease expiring. */
     struct timespec lease_t2; /**< Client IP address lease end. */
 };

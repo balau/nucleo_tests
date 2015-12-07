@@ -138,7 +138,7 @@ uint8_t *setfield32(uint8_t *field, uint32_t val)
 }
 
 static
-size_t dhcp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xid)
+size_t bootp_check_reply(const uint8_t *msg, const uint8_t *mac_addr, uint32_t xid)
 {
     uint32_t magic = MAGIC;
 
@@ -220,16 +220,17 @@ int dhcp_parse_options(
                     }
                     else
                     {
-                        struct timespec lease_t1;
-                        struct timespec lease_t2;
+                        struct timespec t1;
+                        struct timespec t2;
+                        struct timespec now;
 
-                        lease_t1.tv_sec = lease/4;
-                        lease_t1.tv_nsec = 0;
-                        lease_t2.tv_sec = lease/2;
-                        lease_t2.tv_nsec = 0;
-                        clock_gettime(CLOCK_REALTIME, &binding->lease_t1);
-                        timespec_incr(&binding->lease_t1, &lease_t1);
-                        timespec_add(&binding->lease_t1, &lease_t2, &binding->lease_t2);
+                        t1.tv_sec = lease/2;
+                        t1.tv_nsec = 0;
+                        t2.tv_sec = lease - (lease/8);
+                        t2.tv_nsec = 0;
+                        clock_gettime(CLOCK_REALTIME, &now);
+                        timespec_add(&now, &t1, &binding->lease_t1);
+                        timespec_add(&now, &t2, &binding->lease_t2);
                     }
                     break;
                 case OPT_SUBNET:
@@ -256,156 +257,36 @@ int dhcp_parse_options(
 }
 
 static
-int dhcp_check_offer(
-        const uint8_t *p_options,
-        size_t options_size,
-        struct dhcp_binding *offer)
+int dhcp_check_options(
+        struct dhcp_binding *options)
 {
     int ret;
-    int isoffer;
-    struct dhcp_binding o;
-    uint8_t type;
 
-    memset(&o, 0, sizeof(struct dhcp_binding)); /* INADDR_ANY */
-
-    dhcp_parse_options(
-            p_options,
-            options_size,
-            &type,
-            &o);
-
-    isoffer = (type == DHCPOFFER);
-
-    if (!isoffer)
-    {
-        ret = DHCP_EOFFEREXPECTED;
-    }
-    if (o.dhcp_server == INADDR_ANY)
+    if (options->dhcp_server == INADDR_ANY)
     {
         ret = DHCP_ENOSERVERID;
     }
-    else if (o.gateway == INADDR_ANY)
+    else if (options->gateway == INADDR_ANY)
     {
         ret = DHCP_ENOGATEWAY;
     }
-    else if (o.subnet == INADDR_ANY)
+    else if (options->subnet == INADDR_ANY)
     {
         ret = DHCP_ENOSUBNET;
     }
     else
     {
-        if (timespec_diff(&TIMESPEC_ZERO, &o.lease_t1, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &options->lease_t1, NULL) == 0)
         {
-            o.lease_t1 = TIMESPEC_INFINITY;
+            options->lease_t1 = TIMESPEC_INFINITY;
         }
-        if (timespec_diff(&TIMESPEC_ZERO, &o.lease_t2, NULL) == 0)
+        if (timespec_diff(&TIMESPEC_ZERO, &options->lease_t2, NULL) == 0)
         {
-            o.lease_t2 = TIMESPEC_INFINITY;
+            options->lease_t2 = TIMESPEC_INFINITY;
         }
-        /* DNS is not necessary */
-        *offer = o;
         ret = 0;
     }
 
-    return ret;
-}
-
-static
-ssize_t dhcp_reply_recv(
-        int sock,
-        const uint8_t *mac_addr,
-        uint32_t xid,
-        uint8_t *dhcp_message
-        )
-{
-    int ret;
-    ssize_t dhcp_message_size;
-    struct sockaddr_in server;
-    socklen_t server_addr_len;
-
-    dhcp_message_size = recvfrom(
-            sock,
-            dhcp_message,
-            sizeof(dhcp_message),
-            0,
-            (struct sockaddr *)&server,
-            &server_addr_len);
-    if (dhcp_message_size < 0)
-    {
-        ret = DHCP_ESYSCALL;
-    }
-    else if (server.sin_port != htons(67))
-    {
-        ret = 0;
-    }
-    else if (dhcp_message_size < DHCP_MESSAGE_LEN_MIN)
-    {
-        ret = 0;
-    }
-    else if (dhcp_check_reply(dhcp_message, mac_addr, xid) <= OFFSET_OPTIONS)
-    {
-        ret = 0;
-    }
-    else
-    {
-        ret = dhcp_message_size;
-    }
-
-    return ret;
-}
-
-static
-int dhcp_offer_recv(
-        int sock,
-        const uint8_t *mac_addr,
-        uint32_t xid,
-        struct dhcp_binding *offer)
-{
-    int ret;
-
-    while(1)
-    {
-        uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
-        ssize_t dhcp_message_size;
-
-        /* TODO: timeout */
-        dhcp_message_size = dhcp_reply_recv(
-                sock,
-                mac_addr,
-                xid,
-                dhcp_message);
-        if (dhcp_message_size == 0)
-        {
-            continue;
-        }
-        else if (dhcp_message_size < 0)
-        {
-            ret = dhcp_message_size;
-            break;
-        }
-        else /* It's a DHCP reply for us */
-        {
-            in_addr_t yiaddr;
-
-            memcpy(&yiaddr, &dhcp_message[OFFSET_YIADDR], sizeof(in_addr_t));
-            if ((yiaddr == INADDR_ANY) || (yiaddr == INADDR_BROADCAST))
-            {
-                ret = DHCP_EYIADDR;
-            }
-            else
-            {
-                ret = dhcp_check_offer(
-                        &dhcp_message[DHCP_MESSAGE_HEADER_LEN + LEN_MAGIC],
-                        dhcp_message_size - DHCP_MESSAGE_HEADER_LEN - LEN_MAGIC,
-                        offer);
-                if (ret == 0)
-                {
-                    offer->client = yiaddr;
-                }
-            }
-            break;
-        }
-    }
     return ret;
 }
 
@@ -426,32 +307,18 @@ uint32_t gen_xid(const uint8_t *mac_addr)
 }
 
 static
-uint8_t *dhcp_prepare_bootp(
-        uint8_t *dhcp_message,
-        const uint8_t *mac_addr,
-        uint32_t *xid
-        )
+uint8_t *fill_bootp_request(uint8_t *dhcp_message)
 {
     /* Construct BOOTP header */
     dhcp_message[OFFSET_OP] = BOOTREQUEST;
     dhcp_message[OFFSET_HTYPE] = 1;
     dhcp_message[OFFSET_HLEN] = DHCP_MAC_ADDR_LEN;
     dhcp_message[OFFSET_HOPS] = 0;
-    *xid = gen_xid(mac_addr);
-    setfield32(&dhcp_message[OFFSET_XID], *xid);
     setfield16(&dhcp_message[OFFSET_SECS], 0);
     setfield16(&dhcp_message[OFFSET_FLAGS], FLAG_BROADCAST);
-    /* ciaddr = 0 */
-    /* yiaddr = 0 */
-    /* siaddr = 0 */
-    /* giaddr = 0 */
-    memset(
-            &dhcp_message[OFFSET_CIADDR],
-            0,
-            LEN_CIADDR + LEN_YIADDR + LEN_SIADDR + LEN_GIADDR
-            );
-    /* MAC address */
-    memcpy(&dhcp_message[OFFSET_CHADDR], mac_addr, DHCP_MAC_ADDR_LEN);
+    setfield32(&dhcp_message[OFFSET_YIADDR], 0);
+    setfield32(&dhcp_message[OFFSET_SIADDR], 0);
+    setfield32(&dhcp_message[OFFSET_GIADDR], 0);
     /* last part of MAC address, sname and file set to 0 */
     memset(
             &dhcp_message[OFFSET_CHADDR + DHCP_MAC_ADDR_LEN],
@@ -464,38 +331,19 @@ uint8_t *dhcp_prepare_bootp(
 }
 
 static
-int dhcp_send(
-        int sock,
-        const uint8_t *dhcp_message,
-        size_t dhcp_message_size
-        )
+uint8_t *dhcp_append_option32(uint8_t *p_options, uint8_t opt, uint32_t val)
 {
-    struct sockaddr_in server;
+    *p_options++ = opt;
+    *p_options++ = 4;
+    memcpy(p_options, &val, 4);
+    p_options += 4;
 
-    /* destination is 255.255.255.255:67 broadcast address */
-    server.sin_addr.s_addr = INADDR_BROADCAST;
-    server.sin_family = AF_INET;
-    server.sin_port = htons(67);
-
-    if (sendto(
-            sock,
-            dhcp_message,
-            dhcp_message_size,
-            0,
-            (struct sockaddr *)&server,
-            sizeof(server)
-            ) < 0)
-    {
-        return DHCP_ESYSCALL;
-    }
-    return 0;
+    return p_options;
 }
 
 static
 uint8_t *dhcp_append_common_options(uint8_t *p_options, uint8_t type)
 {
-    const uint32_t lease_infinite = 0xFFFFFFFF;
-
     *p_options++ = OPT_DHCP_MESSAGE_TYPE;
     *p_options++ = 1;
     *p_options++ = type;
@@ -506,54 +354,255 @@ uint8_t *dhcp_append_common_options(uint8_t *p_options, uint8_t type)
     *p_options++ = OPT_SUBNET;
     *p_options++ = OPT_DOMAIN_NAME_SERVER;
 
-    *p_options++ = OPT_IP_ADDRESS_LEASE_TIME;
-    *p_options++ = 4;
-    memcpy(p_options, &lease_infinite, 4);
-    p_options += 4;
+    p_options = dhcp_append_option32(p_options, OPT_IP_ADDRESS_LEASE_TIME, 0xFFFFFFFF);
 
     return p_options;
 }
 
 static
-int dhcp_discover_send(
-        int sock,
-        const uint8_t *mac_addr,
-        uint32_t *xid
-        )
+void dhcp_update_state_noresp(struct dhcp_binding *binding)
 {
-    uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
-    uint8_t *p_options;
-    
-    p_options = dhcp_prepare_bootp(dhcp_message, mac_addr, xid);
+    enum dhcp_state newstate = binding->state;
 
-    /* Append DHCP options */
-    p_options = dhcp_append_common_options(p_options, DHCPDISCOVER);
-    
-    *p_options++ = OPT_END;
-    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
+    newstate = DHCP_INIT;
 
-    return dhcp_send(sock, dhcp_message, sizeof(dhcp_message));
+    if (newstate != binding->state)
+    {
+        binding->state = newstate;
+    }
 }
 
 static
-int dhcp_socket_create(void)
+void dhcp_update_state(struct dhcp_binding *binding, uint8_t dhcp_message_type)
+{
+    enum dhcp_state newstate = binding->state;
+
+    switch(binding->state)
+    {
+        case DHCP_INIT:
+            if (dhcp_message_type == DHCPDISCOVER)
+            {
+                newstate = DHCP_SELECTING;
+            }
+            break;
+        case DHCP_SELECTING:
+            if (dhcp_message_type == DHCPREQUEST)
+            {
+                newstate = DHCP_REQUESTING;
+            }
+            break;
+        case DHCP_REQUESTING:
+        case DHCP_REBINDING:
+        case DHCP_RENEWING:
+        case DHCP_REBOOTING:
+            if (dhcp_message_type == DHCPACK)
+            {
+                newstate = DHCP_BOUND;
+            }
+            else if (dhcp_message_type == DHCPNAK)
+            {
+                newstate = DHCP_INIT;
+            }
+            break;
+        case DHCP_BOUND:
+            if (dhcp_message_type == DHCPREQUEST)
+            {
+                newstate = DHCP_RENEWING;
+            }
+            break;
+        case DHCP_INIT_REBOOT:
+            if (dhcp_message_type == DHCPREQUEST)
+            {
+                newstate = DHCP_REBOOTING;
+            }
+            break;
+        default:
+            /* TODO: manage error */
+            break;
+    }
+    if (newstate != binding->state)
+    {
+        binding->state = newstate;
+    }
+}
+
+static
+int send_bootp_request(int sock, struct dhcp_binding *binding)
+{
+    int ret;
+    uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
+    uint8_t *p_options;
+    uint8_t type;
+    
+    if (binding->state != DHCP_SELECTING)
+    {
+        binding->xid = gen_xid(binding->mac_addr);
+    }
+    setfield32(&dhcp_message[OFFSET_XID], binding->xid);
+    setfield32(&dhcp_message[OFFSET_CIADDR], binding->client);
+    memcpy(&dhcp_message[OFFSET_CHADDR], binding->mac_addr, DHCP_MAC_ADDR_LEN);
+
+    p_options = fill_bootp_request(dhcp_message);
+
+    /* Append DHCP options */
+    switch (binding->state)
+    {
+        case DHCP_INIT:
+            type = DHCPDISCOVER;
+            break;
+        case DHCP_SELECTING:
+        case DHCP_BOUND:
+        case DHCP_RENEWING:
+            type = DHCPREQUEST;
+            break;
+        default:
+            /* should never get here TODO: manage error */
+            type = DHCPREQUEST;
+            break;
+    }
+    p_options = dhcp_append_common_options(p_options, type);
+    
+    if (binding->state == DHCP_SELECTING)
+    {
+        p_options = dhcp_append_option32(p_options, OPT_SERVER_IDENTIFIER, binding->dhcp_server);
+    }
+
+    if (binding->state == DHCP_SELECTING)
+    {
+        p_options = dhcp_append_option32(p_options, OPT_REQUESTED_IP_ADDRESS, binding->client);
+    }
+
+    *p_options++ = OPT_END;
+    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
+
+    if (send(sock, dhcp_message, sizeof(dhcp_message), 0) < 0)
+    {
+        ret = DHCP_ESYSCALL;
+    }
+    else
+    {
+        dhcp_update_state(binding, type);
+        ret = 0;
+    }
+
+    return ret;
+}
+
+static
+int recv_bootp_reply(int sock, struct dhcp_binding *binding)
+{
+    int ret;
+
+    while(1) /* TODO: timeout */
+    {
+        uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
+        ssize_t dhcp_message_size;
+        struct sockaddr_in server;
+        socklen_t server_addr_len;
+
+        dhcp_message_size = recvfrom(
+                sock,
+                dhcp_message,
+                sizeof(dhcp_message),
+                0,
+                (struct sockaddr *)&server,
+                &server_addr_len);
+        if (dhcp_message_size < 0)
+        {
+            ret = DHCP_ESYSCALL;
+            break;
+        }
+        else if (dhcp_message_size == 0)
+        {
+            continue;
+        }
+        else if (bootp_check_reply(dhcp_message, binding->mac_addr, binding->xid) <= OFFSET_OPTIONS)
+        {
+            continue;
+        }
+        else /* It's a DHCP reply for us */
+        {
+            in_addr_t yiaddr;
+            struct dhcp_binding options;
+            uint8_t type;
+            int len_error;
+
+            memset(&options, 0, sizeof(struct dhcp_binding));
+            len_error = dhcp_parse_options(
+                    &dhcp_message[OFFSET_OPTIONS + LEN_MAGIC],
+                    dhcp_message_size - (OFFSET_OPTIONS + LEN_MAGIC),
+                    &type,
+                    &options);
+            if (len_error == -1)
+            {
+                continue; /* malformed answer */
+            }
+            memcpy(&yiaddr, &dhcp_message[OFFSET_YIADDR], sizeof(in_addr_t));
+
+            if ((type == DHCPOFFER) && (binding->state == DHCP_SELECTING))
+            {
+                ret = dhcp_check_options(&options);
+                if (ret == 0)
+                {
+                    binding->client = yiaddr;
+                    binding->dhcp_server = options.dhcp_server;
+                }
+            }
+            else if (
+                    (binding->state == DHCP_REQUESTING) ||
+                    (binding->state == DHCP_RENEWING) ||
+                    (binding->state == DHCP_REBINDING) ||
+                    (binding->state == DHCP_REBOOTING)
+                    )
+            {
+                if (type == DHCPACK)
+                {
+                    ret = dhcp_check_options(&options);
+                    binding->client = yiaddr;
+                    binding->dhcp_server = options.dhcp_server;
+                    binding->gateway = options.gateway;
+                    binding->subnet = options.subnet;
+                    binding->dns_server = options.dns_server;
+                    binding->lease_t1 = options.lease_t1;
+                    binding->lease_t2 = options.lease_t2;
+                }
+                else if (type == DHCPNAK)
+                {
+                    binding->client = INADDR_ANY;
+                    binding->dhcp_server = INADDR_ANY;
+                    ret = 0;
+                }
+                else
+                {
+                    ret = 0; /* ignore others */
+                }
+            }
+            else
+            {
+                ret = 0; /* ignore others */
+            }
+            if (ret == 0)
+            {
+                dhcp_update_state(binding, type);
+            }
+            break;
+        }
+    }
+    return ret;
+}
+
+static
+int bootp_socket_create(struct dhcp_binding *binding)
 {
     int sock;
     struct sockaddr_in client;
-    int can_broadcast;
+    struct sockaddr_in server;
     struct timespec timeout = {1, 0}; /* 1s */
 
     /* create UDP socket */
     sock = socket(AF_INET , SOCK_DGRAM , 0);
     if (sock == -1)
     {
-        return DHCP_ESYSCALL;
-    }
-
-    can_broadcast = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &can_broadcast, sizeof(int)) == -1)
-    {
-        close(sock);
         return DHCP_ESYSCALL;
     }
 
@@ -568,12 +617,34 @@ int dhcp_socket_create(void)
         return DHCP_ESYSCALL;
     }
 
-
-    /* bind socket with 0.0.0.0:68 client address */
-    client.sin_addr.s_addr = INADDR_ANY;
+    client.sin_addr.s_addr = binding->client;
     client.sin_family = AF_INET;
     client.sin_port = htons(68);
     if (bind(sock, (struct sockaddr *)&client, sizeof(client)) == -1)
+    {
+        close(sock);
+        return DHCP_ESYSCALL;
+    }
+    if (binding->state == DHCP_BOUND)
+    {
+        server.sin_addr.s_addr = binding->dhcp_server;
+    }
+    else
+    {
+        int can_broadcast;
+
+        server.sin_addr.s_addr = INADDR_BROADCAST;
+        can_broadcast = 1;
+        if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &can_broadcast, sizeof(int)) == -1)
+        {
+            close(sock);
+            return DHCP_ESYSCALL;
+        }
+    }
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(67);
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) == -1)
     {
         close(sock);
         return DHCP_ESYSCALL;
@@ -583,15 +654,13 @@ int dhcp_socket_create(void)
 }
 
 static
-int dhcp_discover(
-        const uint8_t *mac_addr,
-        struct dhcp_binding *offer)
+int bootp_transaction(struct dhcp_binding *binding)
 {
     int attempt;
     int ret;
     int sock;
-   
-    sock = dhcp_socket_create();
+
+    sock = bootp_socket_create(binding);
     if (sock < 0)
     {
         return sock;
@@ -599,17 +668,16 @@ int dhcp_discover(
 
     for (attempt = 0; attempt < DHCP_DISCOVER_RETRIES; attempt++)
     {
-        uint32_t xid;
-
-        ret = dhcp_discover_send(sock, mac_addr, &xid);
+        ret = send_bootp_request(sock, binding);
         if (ret != 0)
         {
             continue;/* retry */
         }
-        ret = dhcp_offer_recv(sock, mac_addr, xid, offer);
+        ret = recv_bootp_reply(sock, binding);
         if (ret != 0)
         {
             /* TODO: random backoff increasing with attempt */
+            dhcp_update_state_noresp(binding);
             continue;/* retry */
         }
         break;
@@ -619,262 +687,72 @@ int dhcp_discover(
 }
 
 static
-int dhcp_request_send(
-        int sock,
-        const struct dhcp_binding *offer,
-        uint32_t *xid)
+time_t get_dhcp_next_event(const struct dhcp_binding *binding)
 {
-    uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
-    uint8_t *p_options;
-    
-    p_options = dhcp_prepare_bootp(dhcp_message, offer->mac_addr, xid);
+    time_t next = 0;
 
-    /* Append DHCP options */
-    p_options = dhcp_append_common_options(p_options, DHCPREQUEST);
-    
-    *p_options++ = OPT_SERVER_IDENTIFIER;
-    *p_options++ = 4;
-    memcpy(p_options, &offer->dhcp_server, 4);
-    p_options += 4;
-
-    *p_options++ = OPT_REQUESTED_IP_ADDRESS;
-    *p_options++ = 4;
-    memcpy(p_options, &offer->client, 4);
-    p_options += 4;
-
-    *p_options++ = OPT_END;
-    memset(p_options, 0, sizeof(dhcp_message) - (p_options - dhcp_message));
-
-    return dhcp_send(sock, dhcp_message, sizeof(dhcp_message));
-}
-
-static
-int dhcp_ack_check(
-        const uint8_t *p_options,
-        size_t options_size,
-        struct dhcp_binding *ack)
-{
-    int ret;
-    int isoffer;
-    struct dhcp_binding a;
-    uint8_t type;
-
-    memset(&a, 0, sizeof(struct dhcp_binding)); /* INADDR_ANY */
-
-    dhcp_parse_options(
-            p_options,
-            options_size,
-            &type,
-            &a);
-
-    isoffer = (type == DHCPACK);
-
-    if (!isoffer)
+    if (binding->state == DHCP_BOUND || binding->state == DHCP_RENEWING)
     {
-        ret = DHCP_EOFFEREXPECTED;
-    }
-    if (a.dhcp_server == INADDR_ANY)
-    {
-        ret = DHCP_ENOSERVERID;
-    }
-    else if (a.gateway == INADDR_ANY)
-    {
-        ret = DHCP_ENOGATEWAY;
-    }
-    else if (a.subnet == INADDR_ANY)
-    {
-        ret = DHCP_ENOSUBNET;
-    }
-    else
-    {
-        if (timespec_diff(&TIMESPEC_ZERO, &a.lease_t1, NULL) == 0)
+        struct timespec now;
+        struct timespec diff_t1;
+        struct timespec diff_t2;
+        int expired_t1;
+        int expired_t2;
+
+        clock_gettime(CLOCK_REALTIME, &now);
+        expired_t1 = (timespec_diff(&binding->lease_t1, &now, &diff_t1) <= 0);
+        expired_t2 = (timespec_diff(&binding->lease_t2, &now, &diff_t2) <= 0);
+
+        if (binding->state == DHCP_BOUND)
         {
-            a.lease_t1 = TIMESPEC_INFINITY;
-        }
-        if (timespec_diff(&TIMESPEC_ZERO, &a.lease_t2, NULL) == 0)
-        {
-            a.lease_t2 = TIMESPEC_INFINITY;
-        }
-        /* DNS is not necessary */
-        *ack = a;
-        ret = 0;
-    }
-
-    return ret;
-}
-
-static
-int dhcp_ack_recv(
-        int sock,
-        uint32_t xid,
-        const struct dhcp_binding *offer,
-        struct dhcp_binding *ack)
-{
-    int ret;
-
-    while(1)
-    {
-        uint8_t dhcp_message[DHCP_MESSAGE_LEN_MAX];
-        ssize_t dhcp_message_size;
-
-        /* TODO: timeout */
-        dhcp_message_size = dhcp_reply_recv(
-                sock,
-                offer->mac_addr,
-                xid,
-                dhcp_message);
-        if (dhcp_message_size == 0)
-        {
-            continue;
-        }
-        else if (dhcp_message_size < 0)
-        {
-            ret = dhcp_message_size;
-            break;
-        }
-        else /* It's a DHCP reply for us */
-        {
-            in_addr_t yiaddr;
-
-            memcpy(&yiaddr, &dhcp_message[OFFSET_YIADDR], sizeof(in_addr_t));
-            if ((yiaddr == INADDR_ANY) || (yiaddr == INADDR_BROADCAST))
+            if (expired_t1)
             {
-                ret = DHCP_EYIADDR;
+                /* expired_t2 ==> expired_t1 */
+                next = 0;
             }
             else
             {
-                ret = dhcp_ack_check(
-                        &dhcp_message[DHCP_MESSAGE_HEADER_LEN + LEN_MAGIC],
-                        dhcp_message_size - DHCP_MESSAGE_HEADER_LEN - LEN_MAGIC,
-                        ack);
-                (void)offer; /* TODO: check that ack has same params */
-                if (ret == 0)
-                {
-                    ack->client = yiaddr;
-                }
+                next = diff_t1.tv_sec; /* wait for T1 */
             }
-            break;
         }
-    }
-    return ret;
-}
-
-static
-int dhcp_request(
-        const struct dhcp_binding *offer,
-        struct dhcp_binding *ack)
-{
-    int attempt;
-    int ret;
-    int sock;
-   
-    sock = dhcp_socket_create();
-    if (sock < 0)
-    {
-        return sock;
-    }
-
-    for (attempt = 0; attempt < DHCP_REQUEST_RETRIES; attempt++)
-    {
-        uint32_t xid;
-
-        ret = dhcp_request_send(sock, offer, &xid);
-        if (ret != 0)
+        else if (binding->state == DHCP_RENEWING)
         {
-            continue;/* retry */
+            if (expired_t2)
+            {
+                next = 0;
+            }
+            else
+            {
+                next = diff_t2.tv_sec; /* wait for T2 */
+            }
         }
-        ret = dhcp_ack_recv(sock, xid, offer, ack);
-        if (ret != 0)
-        {
-            /* TODO: random backoff increasing with attempt */
-            continue;/* retry */
-        }
-        break;
     }
-    close(sock);
-    return ret;
+    return next;
 }
 
 int dhcp_allocate(struct dhcp_binding *binding)
 {
-    int ret;
-    struct dhcp_binding offer;
-    struct dhcp_binding ack;
-    int attempt;
-
-    for (attempt = 0; attempt < DHCP_ALLOCATE_RETRIES; attempt++)
+    int ret = 0;
+    while (binding->state != DHCP_BOUND)
     {
-        ret = dhcp_discover(binding->mac_addr, &offer);
+        ret = bootp_transaction(binding);
         if (ret != 0)
         {
-            continue; /* retry */
+            break;
         }
-        ret = dhcp_request(&offer, &ack);
-        if (ret != 0)
-        {
-            continue; /* retry */
-        }
-        *binding = ack;
-        binding->state = DHCP_BOUND;
-        ret = 0;
-        break;
     }
     return ret;
 }
-
-static
-int dhcp_extend_lease(struct dhcp_binding *binding)
-{
-    int ret;
-    struct dhcp_binding offer;
-    struct dhcp_binding ack;
-    int attempt;
-
-    for (attempt = 0; attempt < DHCP_REQUEST_RETRIES; attempt++)
-    {
-        offer = *binding;
-        ret = dhcp_request(&offer, &ack);
-        if (ret != 0)
-        {
-            continue; /* retry */
-        }
-        *binding = ack;
-        ret = 0;
-        break;
-    }
-    return ret;
-}
-
 
 int dhcp_refresh_lease(struct dhcp_binding *binding)
 {
-    int ret;
-    int expired;
-    int almost_expired;
-    struct timespec cur;
-
-    clock_gettime(CLOCK_REALTIME, &cur);
-    expired = timespec_diff(&binding->lease_t2, &cur, NULL) < 0;
-
-    if (!expired)
+    int ret = 0;
+    if (get_dhcp_next_event(binding) == 0)
     {
-        almost_expired = timespec_diff(&binding->lease_t1, &cur, NULL) < 0;
-    }
-    else
-    {
-        almost_expired = 1;
-    }
-    if (expired || almost_expired)
-    {
-        ret = dhcp_extend_lease(binding);
-    }
-    else
-    {
-        ret = DHCP_EAGAIN;
+        ret = bootp_transaction(binding);
     }
     return ret;
 }
-
 
 void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding)
 {
@@ -886,23 +764,25 @@ void dhcp_init(const uint8_t *mac_addr, struct dhcp_binding *binding)
 int dhcp_update(struct dhcp_binding *binding)
 {
     int ret;
+    time_t next;
 
-    switch(binding->state)
+    do
     {
-        case DHCP_INIT:
-            ret = dhcp_allocate(binding);
-            break;
-        case DHCP_BOUND:
-            ret = dhcp_refresh_lease(binding);
-        default:
-            ret = DHCP_EINTERNAL;
-            break;
-    }
+        next = get_dhcp_next_event(binding);
+        if (next == 0)
+        {
+            ret = bootp_transaction(binding);
+            if (ret != 0)
+            {
+                break;
+            }
+        }
+        else
+        {
+            ret = (int)next;
+        }
+    } while(next == 0);
 
     return ret;
 }
-
-
-
-
 
