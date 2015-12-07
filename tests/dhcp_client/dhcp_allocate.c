@@ -31,12 +31,12 @@ int loop(void)
     w5100_read_regx(W5100_SHAR, mac_addr);
     dhcp_init(mac_addr, &binding);
 
-    ret = dhcp_allocate(&binding);
+    ret = dhcp_bind(&binding);
     if (ret != 0)
     {
         if (ret == DHCP_ESYSCALL)
         {
-            perror("dhcp_allocate");
+            perror("dhcp_bind");
         }
         else
         {

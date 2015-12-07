@@ -22,7 +22,7 @@ int loop(void)
 {
     in_addr_t ip;
 
-    next = w5100_dhcp();
+    next = w5100_dhcp_bind();
     w5100_read_regx(W5100_SIPR, &ip);
     print_ipaddr("IP", ip);
     print_ipaddr("DNS", w5100_getdns());
