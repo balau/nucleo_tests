@@ -6,6 +6,10 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/in.h>
+
+extern
+in_addr_t getaddrinfo_dns_server;
 
 static
 int loop(void)
@@ -29,7 +33,14 @@ int loop(void)
     res = getaddrinfo(name, NULL, &hints, &ai);
     if (res != 0)
     {
-        fprintf(stderr, "error: getaddrinfo: %d\n", res);
+        if (res == EAI_SYSTEM)
+        {
+            perror("getaddrinfo");
+        }
+        else
+        {
+            fprintf(stderr, "error: getaddrinfo: %d\n", res);
+        }
         return 1;
     }
     for (ai_iter = ai; ai_iter != NULL; ai_iter = ai_iter->ai_next)
