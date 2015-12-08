@@ -544,6 +544,30 @@ int getaddrinfo(
     int sock;
     uint16_t id;
 
+    if ((nodename == NULL) && (servname == NULL))
+    {
+        return EAI_NONAME;
+    }
+    if (hints != NULL)
+    {
+        if (
+                (hints->ai_family != AF_UNSPEC) &&
+                (hints->ai_family != AF_INET) &&
+                (hints->ai_family != 0)
+           )
+        {
+            return EAI_FAMILY;
+        }
+        if (
+                (hints->ai_socktype != SOCK_DGRAM) &&
+                (hints->ai_socktype != SOCK_STREAM) &&
+                (hints->ai_socktype != 0)
+           )
+        {
+            return EAI_SOCKTYPE;
+        }
+    }
+
     sock = create_socket(getaddrinfo_dns_server);
     if (sock == -1)
     {
