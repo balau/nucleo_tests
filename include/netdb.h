@@ -85,6 +85,9 @@ struct addrinfo {
 #define EAI_FAMILY   4
 #define EAI_MEMORY   5
 #define EAI_NONAME   6
+#define EAI_SERVICE  7
+#define EAI_SOCKTYPE 8
+#define EAI_SYSTEM   9
 
 void endhostent(void);
 
