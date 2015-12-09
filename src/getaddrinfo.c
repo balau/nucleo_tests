@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <sys/time.h>
 
 #define DNS_MSG_LEN 512
 #define DNS_HEADER_LEN 12
@@ -299,7 +300,7 @@ int create_socket(in_addr_t dns_server)
 {
     int sock;
     struct sockaddr_in server;
-    struct timespec timeout = {1, 0}; /* 1s TODO: timeval? */
+    struct timeval timeout = {1, 0}; /* 1s */
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock == -1)
@@ -307,12 +308,12 @@ int create_socket(in_addr_t dns_server)
         return -1;
     }
     
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timespec)) == -1)
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) == -1)
     {
         close(sock);
         return -1;
     }
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(struct timespec)) == -1)
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(struct timeval)) == -1)
     {
         close(sock);
         return -1;

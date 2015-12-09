@@ -25,6 +25,7 @@
 #include <string.h>
 #include <limits.h>
 #include "timespec.h"
+#include <sys/time.h>
 
 //#define DHCP_DEBUG
 
@@ -610,7 +611,7 @@ int bootp_socket_create(struct dhcp_binding *binding)
     int sock;
     struct sockaddr_in client;
     struct sockaddr_in server;
-    struct timespec timeout = {1, 0}; /* 1s */
+    struct timeval timeout = {1, 0}; /* 1s */
 
     /* create UDP socket */
     sock = socket(AF_INET , SOCK_DGRAM , 0);
@@ -619,12 +620,12 @@ int bootp_socket_create(struct dhcp_binding *binding)
         return DHCP_ESYSCALL;
     }
 
-    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timespec)) == -1)
+    if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) == -1)
     {
         close(sock);
         return DHCP_ESYSCALL;
     }
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(struct timespec)) == -1)
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(struct timeval)) == -1)
     {
         close(sock);
         return DHCP_ESYSCALL;
