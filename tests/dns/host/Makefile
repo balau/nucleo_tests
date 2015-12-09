@@ -11,11 +11,11 @@ run: dns
 dns.c: ../dns.c
 	cp $< $@
 
-dns: getaddrinfo.o
+dns: getaddrinfo.c
 
 getaddrinfo.c: ../../../src/getaddrinfo.c
 	cp $< $@
 
 clean:
-	rm -f dns dns.c
+	rm -f dns dns.c getaddrinfo.c
 
