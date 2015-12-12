@@ -96,6 +96,7 @@ static struct w5100_socket {
     int type;
     int protocol;
     enum w5100_socket_state state;
+    struct sockaddr_in sockname;
     struct sockaddr_in dest_address;
     int can_broadcast;
     struct timespec recv_timeout;
@@ -362,6 +363,7 @@ int socket_create(int type)
             s->protocol = 0;
             s->state = W5100_SOCK_STATE_CREATED;
             s->dest_address.sin_family = AF_UNSPEC;
+            s->sockname.sin_family = AF_UNSPEC;
             s->fd_data = fds;
             s->connection_data = NULL;
             s->recv_timeout = TIMESPEC_ZERO;
@@ -443,6 +445,9 @@ void bind_udp(struct w5100_socket *s, uint16_t port)
     do {
         sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
     } while (sr != W5100_SOCK_UDP);
+    s->sockname.sin_family = AF_INET;
+    s->sockname.sin_addr.s_addr = INADDR_ANY; /* TODO: local IP */
+    s->sockname.sin_port = port;
     s->state = W5100_SOCK_STATE_BOUND;
 }
 
@@ -513,6 +518,7 @@ int connect_tcp(struct w5100_socket *s, const struct sockaddr *addr, socklen_t a
         if (sr == W5100_SOCK_ESTABLISHED)
         {
             s->state = W5100_SOCK_STATE_CONNECTED;
+            s->dest_address = *server;
             ret = 0;
         }
         else if (sr == W5100_SOCK_CLOSED)
@@ -622,6 +628,7 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         do {
             sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
         } while (sr != sr_end);
+        s->sockname = *server;
         s->state = W5100_SOCK_STATE_BOUND;
         ret = 0;
     }
@@ -1430,6 +1437,93 @@ int getsockopt(int sockfd, int level, int option_name, void *__restrict option_v
                 errno = EINVAL;
                 break;
         }
+    }
+
+    return ret;
+}
+
+static
+int get_sockaddr_in(
+        const struct sockaddr_in *sock_addr,
+        struct sockaddr *address,
+        socklen_t *address_len)
+{
+    int ret;
+    socklen_t len;
+
+    if (address_len != NULL)
+    {
+        len = *address_len;
+        if ((size_t)len > sizeof(struct sockaddr_in))
+        {
+            len = sizeof(struct sockaddr_in);
+        }
+        *address_len = len;
+    }
+    else
+    {
+        len = sizeof(struct sockaddr_in);
+    }
+    if (address == NULL)
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+    else
+    {
+        memcpy(address, sock_addr, len);
+        ret = 0;
+    }
+    return ret;
+}
+
+int getsockname(
+        int sockfd,
+        struct sockaddr *address,
+        socklen_t *address_len)
+{
+    int ret;
+    const struct w5100_socket *s;
+
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
+    {
+        ret = -1;
+    }
+    else if (s->sockname.sin_family == AF_UNSPEC)
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+    else
+    {
+        ret = get_sockaddr_in(&s->sockname, address, address_len);
+    }
+
+    return ret;
+}
+
+int getpeername(
+        int sockfd,
+        struct sockaddr *address,
+        socklen_t *address_len)
+{
+    int ret;
+    const struct w5100_socket *s;
+
+    s = get_socket_from_fd(sockfd);
+    if (s == NULL)
+    {
+        ret = -1;
+    }
+    else if (s->dest_address.sin_family == AF_UNSPEC)
+    {
+        errno = ENOTCONN;
+        ret = -1;
+    }
+    else
+    {
+        ret = get_sockaddr_in(&s->dest_address, address, address_len);
     }
 
     return ret;
