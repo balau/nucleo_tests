@@ -144,5 +144,11 @@ void setprotoent(int);
 
 void setservent(int);
 
+/* Obsoleted by POSIX.1-2004, removed from POSIX.1-2008
+ * but still needed by libcurl and others.
+ */
+
+struct hostent *gethostbyname(const char *);
+
 #endif /* NETDB_H */
 
