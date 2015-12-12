@@ -31,6 +31,7 @@ int loop(void)
     int socket_desc;
     struct sockaddr_in server;
     int ret;
+    int flags;
      
     printf("Press any key to continue...");
     getchar();
@@ -45,14 +46,22 @@ int loop(void)
     }
     puts("Socket created");
 
-    ret = fcntl(socket_desc, F_SETFL, O_NONBLOCK);
+    flags = fcntl(socket_desc, F_GETFL);
+    if (flags == -1)
+    {
+        perror("fcntl(*, F_GETFL)");
+        close(socket_desc);
+        return 1;
+    }
+    flags |= O_NONBLOCK;
+    ret = fcntl(socket_desc, F_SETFL, flags);
     if (ret == -1)
     {
         perror("fcntl(*, F_SETFL, O_NONBLOCK)");
         close(socket_desc);
         return 1;
     }
-    printf("status: %08x\n", fcntl(socket_desc, F_GETFL));
+    printf("status: %08x\n", flags);
      
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
@@ -103,6 +112,15 @@ int loop(void)
         } while(client_sock <= 0);
         puts("\rConnection accepted");
 
+        flags = fcntl(client_sock, F_GETFL);
+        if (flags == -1)
+        {
+            perror("fcntl(*, F_GETFL)");
+            close(socket_desc);
+            close(client_sock);
+            return 1;
+        }
+        flags |= O_NONBLOCK;
         ret = fcntl(client_sock, F_SETFL, O_NONBLOCK);
         if (ret == -1)
         {
