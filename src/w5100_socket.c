@@ -23,6 +23,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+#include <fcntl.h>
 #include "w5100.h"
 #include "timespec.h"
 
@@ -162,6 +163,7 @@ struct fd *fill_fd_struct(int sockfd, int isocket)
     fds->read = w5100_sock_read;
     fds->close = w5100_sock_close;
     fds->stat.st_mode = S_IFSOCK|S_IRWXU|S_IRWXG|S_IRWXO;
+    fds->status_flags = O_RDWR;
     fds->stat.st_blksize = 1024;
     fds->opaque = &w5100_sockets[isocket];
 

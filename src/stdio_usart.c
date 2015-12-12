@@ -19,6 +19,7 @@
 #include <file.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/spi.h>
 #include <libopencm3/stm32/usart.h>
@@ -98,6 +99,7 @@ void fileno_out_init(int fd)
 
     f->fd = fd;
     f->stat.st_mode = S_IFCHR|S_IWUSR|S_IWGRP|S_IWOTH;
+    f->status_flags = O_WRONLY;
     f->write = stdio_usart_write;
     f->isatty = 1;
     f->isopen = 1;
@@ -111,6 +113,7 @@ void fileno_in_init(int fd)
 
     f->fd = fd;
     f->stat.st_mode = S_IFCHR|S_IRUSR|S_IRGRP|S_IROTH;
+    f->status_flags = O_RDONLY;
     f->read = stdio_usart_read;
     f->isatty = 1;
     f->isopen = 1;

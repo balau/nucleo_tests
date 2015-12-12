@@ -31,6 +31,8 @@ struct fd {
     int (*read)(int, char*, int);
     int (*close)(int);
     int isallocated;
+    int descriptor_flags;
+    int status_flags;
     void *opaque;
 };
 
