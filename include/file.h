@@ -30,6 +30,7 @@ struct fd {
     int (*write)(int, char*, int);
     int (*read)(int, char*, int);
     int (*close)(int);
+    short (*poll)(int);
     int isallocated;
     int descriptor_flags;
     int status_flags;
