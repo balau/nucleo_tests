@@ -702,41 +702,54 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
     {
         uint8_t sr;
         int newsockfd;
+        int nonblock;
 
-        do {
+        nonblock = s->fd_data->status_flags & O_NONBLOCK;
+
+        do
+        {
             sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
-        } while (sr != W5100_SOCK_ESTABLISHED);
-
-        newsockfd = file_alloc();
-        if (newsockfd == -1)
-        {
-            errno = ENFILE;
-            /* go again into listen state */
-            w5100_command(s->isocket, W5100_CMD_CLOSE);
-            w5100_command(s->isocket, W5100_CMD_OPEN);
-            w5100_command(s->isocket, W5100_CMD_LISTEN);
-        }
-        else
-        {
-            struct sockaddr_in *client;
-            s->state = W5100_SOCK_STATE_ACCEPTED;
-            s->connection_data = fill_fd_struct(newsockfd, s->isocket);
-            
-            if (addr != NULL)
+            if (sr == W5100_SOCK_ESTABLISHED)
             {
-                if (addrlen != NULL)
+                newsockfd = file_alloc();
+                if (newsockfd == -1)
                 {
-                    *addrlen = sizeof(struct sockaddr_in);
+                    errno = ENFILE;
+                    /* go again into listen state */
+                    w5100_command(s->isocket, W5100_CMD_CLOSE);
+                    w5100_command(s->isocket, W5100_CMD_OPEN);
+                    w5100_command(s->isocket, W5100_CMD_LISTEN);
                 }
-                client = (struct sockaddr_in *)addr;
-                addr->sa_family = AF_INET;
-                
-                w5100_read_sock_regx(W5100_Sn_DIPR, s->isocket, &client->sin_addr.s_addr);
-                w5100_read_sock_regx(W5100_Sn_DPORT, s->isocket, &client->sin_port);
-            }
+                else
+                {
+                    struct sockaddr_in *client;
 
-        }
-        ret = newsockfd;
+                    s->state = W5100_SOCK_STATE_ACCEPTED;
+                    s->connection_data = fill_fd_struct(newsockfd, s->isocket);
+                    
+                    if (addr != NULL)
+                    {
+                        if (addrlen != NULL)
+                        {
+                            *addrlen = sizeof(struct sockaddr_in);
+                        }
+                        client = (struct sockaddr_in *)addr;
+                        addr->sa_family = AF_INET;
+                        
+                        w5100_read_sock_regx(W5100_Sn_DIPR, s->isocket, &client->sin_addr.s_addr);
+                        w5100_read_sock_regx(W5100_Sn_DPORT, s->isocket, &client->sin_port);
+                    }
+                }
+                ret = newsockfd;
+                break;
+            }
+            else if (nonblock)
+            {
+                errno = EAGAIN;
+                ret = -1;
+                break;
+            }
+        } while(1);
     }
     return ret;
 }
