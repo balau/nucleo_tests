@@ -26,6 +26,8 @@
 
 #define USECS_IN_SEC 1000000
 
+#define MSECS_IN_SEC 1000
+
 extern
 void timespec_to_timeval(const struct timespec *src, struct timeval *dst);
 
