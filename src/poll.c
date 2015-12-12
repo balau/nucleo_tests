@@ -59,7 +59,8 @@ short poll_one(struct pollfd *p)
 
         events = p->events;
         events |= POLLHUP|POLLERR|POLLNVAL;
-        p->revents = events & revents;
+        revents &= events;
+        p->revents = revents;
     }
 
     return revents;
