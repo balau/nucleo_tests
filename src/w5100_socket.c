@@ -1355,6 +1355,29 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 }
 
 static
+short w5100_sock_poll_rw(int isocket)
+{
+    short ret;
+    uint16_t toread;
+    uint16_t towrite;
+
+    toread = read_buf_len(isocket);
+    towrite = write_buf_len(isocket);
+
+    ret = 0;
+    if (toread > 0)
+    {
+        ret |= POLLRDNORM|POLLIN;
+    }
+    if (towrite > 0)
+    {
+        ret |= POLLWRNORM|POLLOUT;
+    }
+
+    return ret;
+}
+
+static
 short w5100_sock_poll(int fd)
 {
     int ret;
@@ -1379,7 +1402,13 @@ short w5100_sock_poll(int fd)
             ret = 0;
         }
     }
-    else if (s->state == W5100_SOCK_STATE_CONNECTED)
+    else if (
+                (s->type == SOCK_STREAM) &&
+                (
+                    (s->state == W5100_SOCK_STATE_CONNECTED) ||
+                    (s->state == W5100_SOCK_STATE_ACCEPTED)
+                )
+            )
     {
         uint8_t sr;
 
@@ -1391,22 +1420,18 @@ short w5100_sock_poll(int fd)
         }
         else
         {
-            uint16_t toread;
-            uint16_t towrite;
-
-            toread = read_buf_len(s->isocket);
-            towrite = write_buf_len(s->isocket);
-
-            ret = 0;
-            if (toread > 0)
-            {
-                ret |= POLLRDNORM|POLLIN;
-            }
-            if (towrite > 0)
-            {
-                ret |= POLLWRNORM|POLLOUT;
-            }
+            ret = w5100_sock_poll_rw(s->isocket);
         }
+    }
+    else if (
+                (s->type == SOCK_DGRAM) &&
+                (
+                    (s->state == W5100_SOCK_STATE_CONNECTED) ||
+                    (s->state == W5100_SOCK_STATE_BOUND)
+                )
+            )
+    {
+        ret = w5100_sock_poll_rw(s->isocket);
     }
     else
     {
