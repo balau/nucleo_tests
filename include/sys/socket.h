@@ -16,8 +16,8 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef SOCKET_H
-#define SOCKET_H
+#ifndef SYS_SOCKET_H
+#define SYS_SOCKET_H
 
 /* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/sys_socket.h.html */
 
@@ -146,4 +146,5 @@ extern
 int     socketpair(int, int, int, int[2]);
 #endif
 
-#endif
+#endif /* SYS_SOCKET_H */
+

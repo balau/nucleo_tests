@@ -16,8 +16,8 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef IN_H
-#define IN_H
+#ifndef NETINET_IN_H
+#define NETINET_IN_H
 
 /* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/netinet_in.h.html */
 
@@ -57,5 +57,5 @@ struct sockaddr_in {
 
 /* Missing IPv6 stuff */
 
-#endif /* IN_H */
+#endif /* NETINET_IN_H */
 

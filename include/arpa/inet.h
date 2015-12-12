@@ -16,8 +16,8 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef INET_H
-#define INET_H
+#ifndef ARPA_INET_H
+#define ARPA_INET_H
 
 /* http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/arpa_inet.h.html */
 
@@ -34,5 +34,5 @@ char        *inet_ntoa(struct in_addr);
 const char  *inet_ntop(int, const void *__restrict__, char *__restrict__, socklen_t);
 int          inet_pton(int, const char *__restrict__, void *__restrict__);
 
-#endif /* INET_H */
+#endif /* ARPA_INET_H */
 
