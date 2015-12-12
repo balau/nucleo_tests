@@ -38,22 +38,28 @@ short poll_one(struct pollfd *p)
         f = file_struct_get(p->fd);
         if (f == NULL)
         {
-            errno = EINVAL;
-            revents = -1;
+            revents = POLLNVAL;
         }
         else if (f->poll == NULL)
         {
-            errno = EINVAL;
-            revents = -1;
+            revents = POLLNVAL;
         }
         else
         {
             revents = f->poll(p->fd);
+            if (revents == -1)
+            {
+                revents = POLLNVAL;
+            }
         }
     }
     if (revents >= 0)
     {
-        p->revents = p->events & revents;
+        short events;
+
+        events = p->events;
+        events |= POLLHUP|POLLERR|POLLNVAL;
+        p->revents = events & revents;
     }
 
     return revents;
