@@ -1,21 +1,23 @@
 
+all:
+
+EXE = ./dns
+
+$(EXE): ../dns.c
+$(EXE): ../../../src/getaddrinfo.c
+
 CFLAGS += -g -Wall -Wextra
 
 .PHONY: all run clean
-all: dns
+all: $(EXE)
 	@echo \"make run\" to start.
 
-run: dns
-	./$<
+run: $(EXE)
+	$(EXE)
 
-dns.c: ../dns.c
-	cp $< $@
-
-dns: getaddrinfo.c
-
-getaddrinfo.c: ../../../src/getaddrinfo.c
-	cp $< $@
+$(EXE):
+	$(LINK.c) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 clean:
-	rm -f dns dns.c getaddrinfo.c
+	rm -f $(EXE) 
 
