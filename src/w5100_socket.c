@@ -24,6 +24,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <fcntl.h>
+#include <poll.h>
 #include "w5100.h"
 #include "timespec.h"
 
@@ -80,6 +81,9 @@ int w5100_sock_read(int fd, char *buf, int len);
 
 static
 int w5100_sock_close(int fd);
+
+static
+short w5100_sock_poll(int fd);
 
 static
 void timeout_init(const struct timespec *timeout, struct timeout_manager *tom);
@@ -163,6 +167,7 @@ struct fd *fill_fd_struct(int sockfd, int isocket)
     fds->write = w5100_sock_write;
     fds->read = w5100_sock_read;
     fds->close = w5100_sock_close;
+    fds->poll = w5100_sock_poll;
     fds->stat.st_mode = S_IFSOCK|S_IRWXU|S_IRWXG|S_IRWXO;
     fds->status_flags = O_RDWR;
     fds->stat.st_blksize = 1024;
@@ -1346,6 +1351,68 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         errno = EBADF;
         ret = -1;
     }
+    return ret;
+}
+
+static
+short w5100_sock_poll(int fd)
+{
+    int ret;
+    struct w5100_socket *s;
+
+    s = get_socket_from_fd(fd);
+    if (s == NULL)
+    {
+        ret = POLLNVAL;
+    }
+    else if(s->state == W5100_SOCK_STATE_LISTENING)
+    {
+        uint8_t sr;
+
+        sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+        if (sr == W5100_SOCK_ESTABLISHED)
+        {
+            ret = POLLRDNORM|POLLIN;
+        }
+        else
+        {
+            ret = 0;
+        }
+    }
+    else if (s->state == W5100_SOCK_STATE_CONNECTED)
+    {
+        uint8_t sr;
+
+        sr = w5100_read_sock_reg(W5100_Sn_SR, s->isocket);
+
+        if (sr != W5100_SOCK_ESTABLISHED)
+        {
+            ret = POLLHUP;
+        }
+        else
+        {
+            uint16_t toread;
+            uint16_t towrite;
+
+            toread = read_buf_len(s->isocket);
+            towrite = write_buf_len(s->isocket);
+
+            ret = 0;
+            if (toread > 0)
+            {
+                ret |= POLLRDNORM|POLLIN;
+            }
+            if (towrite > 0)
+            {
+                ret |= POLLWRNORM|POLLOUT;
+            }
+        }
+    }
+    else
+    {
+        ret = POLLNVAL;
+    }
+
     return ret;
 }
 
