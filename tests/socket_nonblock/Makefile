@@ -26,6 +26,7 @@ OBJS += $(ROOT_DIR)/src/syscalls.o
 OBJS += $(ROOT_DIR)/src/file.o
 OBJS += $(ROOT_DIR)/src/timespec.o
 OBJS += $(ROOT_DIR)/src/clock_gettime_systick.o
+OBJS += $(ROOT_DIR)/src/fcntl.o
 LDLIBS_SYS =
 
 include ../test.mk
