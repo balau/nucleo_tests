@@ -948,6 +948,10 @@ uint16_t read_buf(int isocket, void *buf, size_t len)
         read_buf_sure(isocket, buf, len, &pread);
         read_buf_recv(isocket, pread);
     }
+    else
+    {
+        len = 0;
+    }
     return len;
 }
 
