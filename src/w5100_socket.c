@@ -1084,8 +1084,14 @@ ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
     else
     {
         struct timeout_manager tom;
+        int nonblock;
 
-        timeout_init(&s->recv_timeout, &tom);
+        nonblock = s->fd_data->status_flags & O_NONBLOCK;
+
+        if (!nonblock)
+        {
+            timeout_init(&s->recv_timeout, &tom);
+        }
         do
         {
             if (s->type == SOCK_STREAM)
@@ -1139,7 +1145,13 @@ ssize_t recvfrom(int sockfd, void *__restrict buf, size_t len, int flags,
                     break;
                 }
             }
-            if (timeout_ended(&tom))
+            if (nonblock)
+            {
+                ret = -1;
+                errno = EAGAIN;
+                break;
+            }
+            else if (timeout_ended(&tom))
             {
                 ret = -1;
                 break;
@@ -1187,28 +1199,46 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags)
         errno = ENOTCONN;
         ret = 1;
     }
-    else if (manage_disconnect(s) == -1)
-    {
-        ret = -1;
-    }
     else
     {
         size_t towrite;
         struct timeout_manager tom;
         const uint8_t *bytes;
+        int nonblock;
 
+        nonblock = s->fd_data->status_flags & O_NONBLOCK;
         towrite = len;
         bytes = buf;
-        timeout_init(&s->send_timeout, &tom);
+        if (!nonblock)
+        {
+            timeout_init(&s->send_timeout, &tom);
+        }
 
         while (towrite > 0)
         {
             size_t written;
 
             written = write_buf(s->isocket, bytes, towrite);
-            bytes += written;
-            towrite -= written;
-            if (timeout_ended(&tom))
+            if (written > 0)
+            {
+                bytes += written;
+                towrite -= written;
+                if (nonblock)
+                {
+                    break;
+                }
+            }
+            else if (manage_disconnect(s) == -1)
+            {
+                ret = -1;
+                break;
+            }
+            else if (nonblock)
+            {
+                errno = EAGAIN;
+                break;
+            }
+            else if (timeout_ended(&tom))
             {
                 break;
             }
@@ -1260,8 +1290,13 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
         else
         {
             struct timeout_manager tom;
+            int nonblock;
 
-            timeout_init(&s->send_timeout, &tom);
+            nonblock = s->fd_data->status_flags & O_NONBLOCK;
+            if (!nonblock)
+            {
+                timeout_init(&s->send_timeout, &tom);
+            }
             do
             {
                 if (write_buf_len(s->isocket) >= len)
@@ -1272,7 +1307,13 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
                     ret = write_buf(s->isocket, buf, len);
                     break;
                 }
-                if (timeout_ended(&tom))
+                else if (nonblock)
+                {
+                    errno = EAGAIN;
+                    ret = 1;
+                    break;
+                }
+                else if (timeout_ended(&tom))
                 {
                     ret = -1;
                     break;
