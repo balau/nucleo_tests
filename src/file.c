@@ -23,19 +23,27 @@
 #include <stdint.h>
 #include <string.h>
 #include <file.h>
+#include <limits.h>
 
-#ifndef NFILES_MAX
-#  define NFILES_MAX 16
+#ifndef OPEN_MAX
+/* We redefine OPEN_MAX here: its definition is what happens in this C source file. */
+#  ifdef _POSIX_OPEN_MAX
+#    warning "We needed OPEN_MAX from limits.h; using _POSIX_OPEN_MAX"
+#    define OPEN_MAX _POSIX_OPEN_MAX
+#  else
+#    warning "We needed OPEN_MAX from limits.h;  assuming 20 which is _POSIX_OPEN_MAX in POSIX.1-2008"
+#    define OPEN_MAX 20
+#  endif
 #endif
 
 static
-struct fd files[NFILES_MAX];
+struct fd files[OPEN_MAX];
 
 struct fd *file_struct_get(int fd)
 {
     struct fd *f;
 
-    if (fd >= NFILES_MAX)
+    if (fd >= OPEN_MAX)
     {
         f = NULL;
     }
@@ -52,7 +60,7 @@ int file_alloc(void)
     int ret = -1;
 
     /* starting from 3 because of STDIN, STDOUT, STDERR */
-    for (fd = 3; fd < NFILES_MAX; fd++)
+    for (fd = 3; fd < OPEN_MAX; fd++)
     {
         if (!files[fd].isallocated)
         {
@@ -69,7 +77,7 @@ int file_alloc(void)
 
 void file_free(int fd)
 {
-    if ((fd < NFILES_MAX) && (fd >= 0) && (files[fd].isallocated))
+    if ((fd < OPEN_MAX) && (fd >= 0) && (files[fd].isallocated))
     {
         files[fd].isallocated = 0;
     }
