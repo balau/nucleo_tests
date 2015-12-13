@@ -27,11 +27,22 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <time.h>
+#include <limits.h>
 
-#define FD_SETSIZE 4
+#ifndef OPEN_MAX
+#  ifdef _POSIX_OPEN_MAX
+#    warning "We needed OPEN_MAX to set FD_SETSIZE; using _POSIX_OPEN_MAX"
+#    define FD_SETSIZE _POSIX_OPEN_MAX
+#  else
+#    warning "We needed OPEN_MAX to set FD_SETSIZE; assuming 20 which is _POSIX_OPEN_MAX in POSIX.1-2008"
+#    define FD_SETSIZE 20
+#  endif
+#else
+#  define FD_SETSIZE OPEN_MAX
+#endif
 
 struct fd_set_s {
-    int fds[FD_SETSIZE];
+    unsigned long mask[(FD_SETSIZE + (8*sizeof(unsigned long)) - 1) / (8*sizeof(unsigned long))];
 };
 
 typedef struct fd_set_s fd_set;
