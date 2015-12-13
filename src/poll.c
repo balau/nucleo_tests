@@ -147,7 +147,7 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout)
                 break;
             }
 
-            timeout_expired = (timespec_diff(&tcurrent, &tend, NULL) > 0);
+            timeout_expired = (timespec_diff(&tcurrent, &tend, NULL) >= 0);
         } while(!timeout_expired);
 
     }
