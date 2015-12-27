@@ -56,7 +56,7 @@ ifeq ($(strip $(OPENCM3_DIR)),)
 # user has not specified the library path, so we try to detect it
 
 # where we search for the library
-LIBPATHS := ./libopencm3 ../../../../libopencm3 ../../../../../libopencm3
+LIBPATHS := ./libopencm3 ../../../../libopencm3 ../../../../../libopencm3 ../libopencm3
 
 OPENCM3_DIR := $(wildcard $(LIBPATHS:=/locm3.sublime-project))
 OPENCM3_DIR := $(firstword $(dir $(OPENCM3_DIR)))
@@ -115,7 +115,7 @@ endif
 LDLIBS_SYS ?= -lnosys
 
 LDLIBS		+= -l$(LIBNAME)
-LDLIBS		+= -Wl,--start-group -lc -lgcc $(LDLIBS_SYS) -Wl,--end-group
+LDLIBS		+= -Wl,--start-group -lc_nano -lgcc $(LDLIBS_SYS) -Wl,--end-group
 
 ###############################################################################
 ###############################################################################
@@ -136,13 +136,17 @@ list: $(BINARY).list
 images: $(BINARY).images
 flash: $(BINARY).flash
 
-debug: $(BINARY).elf
-	$(Q)$(GDB) \
-		-ex "target remote | $(OOCD) -f interface/$(OOCD_INTERFACE).cfg -f board/$(OOCD_BOARD).cfg -f $(ROOT_DIR)/scripts/gdb-pipe.cfg" \
+GDB_COMMANDS = -ex "target remote | $(OOCD) -f interface/$(OOCD_INTERFACE).cfg -f board/$(OOCD_BOARD).cfg -f $(ROOT_DIR)/scripts/gdb-pipe.cfg" \
 		-ex "symb $(BINARY).elf" \
 		-ex "monitor halt" \
 		-ex "monitor gdb_sync" \
 		-ex "stepi"
+
+debug: $(BINARY).elf
+	$(Q)$(GDB) $(GDB_COMMANDS)
+
+ddd: $(BINARY).elf
+	$(Q)ddd --debugger '$(GDB) $(GDB_COMMANDS)'
 
 %.images: %.bin %.hex %.srec %.list %.map
 	@#printf "*** $* images generated ***\n"
@@ -163,6 +167,10 @@ debug: $(BINARY).elf
 	@#printf "  OBJDUMP $(*).list\n"
 	$(Q)$(OBJDUMP) -S $(*).elf > $(*).list
 
+%.lst: %.elf
+	@#printf "  OBJDUMP $(*).list\n"
+	$(Q)$(OBJDUMP) -d $(*).elf > $(*).lst
+
 %.elf %.map: $(OBJS) $(LDSCRIPT) $(LIB_DIR)/lib$(LIBNAME).a
 	@#printf "  LD      $(*).elf\n"
 	$(Q)$(LD) $(LDFLAGS) $(ARCH_FLAGS) $(OBJS) $(LDLIBS) -o $(*).elf
@@ -181,7 +189,7 @@ debug: $(BINARY).elf
 
 clean:
 	@#printf "  CLEAN\n"
-	$(Q)$(RM) *.o *.d *.elf *.bin *.hex *.srec *.list *.map $(OBJS) $(OBJS:.o=.d)
+	$(Q)$(RM) *.o *.d *.elf *.bin *.hex *.srec *.list *.lst *.map $(OBJS) $(OBJS:.o=.d)
 
 stylecheck: $(STYLECHECKFILES:=.stylecheck)
 styleclean: $(STYLECHECKFILES:=.styleclean)
