@@ -36,11 +36,21 @@ struct in_addr {
 
 struct sockaddr_in {
     sa_family_t     sin_family; /* AF_INET. */
-    in_port_t       sin_port; /* Port number. */
-    struct in_addr  sin_addr; /* IP address. */
+    in_port_t       sin_port;   /* Port number. */
+    struct in_addr  sin_addr;   /* IP address. */
 };
 
-/* Missing IPv6 stuff */
+struct in6_addr {
+    uint8_t s6_addr[16];
+};
+
+struct sockaddr_in6 {
+    sa_family_t      sin6_family;   /* AF_INET6. */
+    in_port_t        sin6_port;     /* Port number. */
+    uint32_t         sin6_flowinfo; /* IPv6 traffic class and flow information. */
+    struct in6_addr  sin6_addr;     /* IPv6 address. */
+    uint32_t         sin6_scope_id; /* Set of interfaces for a scope. */
+};
 
 #define IPPROTO_IP 1 /* Internet protocol. */
 #define IPPROTO_IPV6 2 /* [IP6]  Internet Protocol Version 6. */
@@ -54,6 +64,14 @@ struct sockaddr_in {
 
 #define INET_ADDRSTRLEN 16 /* Length of the string form for IP. */
 #define INET6_ADDRSTRLEN 46 /* Length of the string form for IPv6. */
+
+#define IPV6_JOIN_GROUP     1 /* Join a multicast group. */
+#define IPV6_LEAVE_GROUP    2 /* Quit a multicast group. */
+#define IPV6_MULTICAST_HOPS 3 /* Multicast hop limit. */
+#define IPV6_MULTICAST_IF   4 /* Interface to use for outgoing multicast packets. */
+#define IPV6_MULTICAST_LOOP 5 /* Multicast packets are delivered back to the local application. */
+#define IPV6_UNICAST_HOPS   6 /* Unicast hop limit. */
+#define IPV6_V6ONLY         7 /* Restrict AF_INET6 socket to IPv6 communications only. */
 
 /* Missing IPv6 stuff */
 
