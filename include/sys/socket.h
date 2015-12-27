@@ -31,13 +31,13 @@ typedef unsigned int sa_family_t;
 struct sockaddr
 {
     sa_family_t sa_family;
-    char sa_data[6];
+    char sa_data[6]; /* TODO: enough for IPV6 */
 };
 
 struct sockaddr_storage
 {
-    sa_family_t sa_family;
-    char sa_data[6];
+    sa_family_t ss_family;
+    char sa_data[6]; /* TODO: enough for IPV6 */
 };
 
 #define AF_INET   0x1 /* Internet domain sockets for use with IPv4 addresses. */
