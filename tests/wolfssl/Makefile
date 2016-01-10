@@ -30,12 +30,12 @@ OBJS += $(ROOT_DIR)/src/gettimeofday.o
 OBJS += $(ROOT_DIR)/src/getaddrinfo.o
 LDLIBS_SYS =
 
-include ../test.mk
-
 WOLFSSL_DIR = $(ROOT_DIR)/wolfssl-3.7.0
 CPPFLAGS += -I$(WOLFSSL_DIR)
 LDFLAGS += -L$(WOLFSSL_DIR)/src/.libs
 LDLIBS += -lwolfssl -lm
+
+include ../test.mk
 
 clean: libwolfssl_clean
 
