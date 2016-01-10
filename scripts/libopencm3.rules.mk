@@ -100,7 +100,7 @@ CPPFLAGS	+= -I$(INCLUDE_DIR) $(DEFS)
 ###############################################################################
 # Linker flags
 
-LDFLAGS		+= --static -nostartfiles
+LDFLAGS		+= --static -nostdlib
 LDFLAGS		+= -L$(LIB_DIR)
 LDFLAGS		+= -T$(LDSCRIPT)
 LDFLAGS		+= -Wl,-Map=$(*).map
@@ -115,7 +115,7 @@ endif
 LDLIBS_SYS ?= -lnosys
 
 LDLIBS		+= -l$(LIBNAME)
-LDLIBS		+= -Wl,--start-group -lc_nano -lgcc $(LDLIBS_SYS) -Wl,--end-group
+LDLIBS		+= -Wl,--start-group -lg_nano -lgcc $(LDLIBS_SYS) -Wl,--end-group
 
 ###############################################################################
 ###############################################################################
