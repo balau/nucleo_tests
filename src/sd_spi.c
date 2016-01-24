@@ -202,7 +202,8 @@ void sd_init(void)
     spi_set_nss_high(SPI1); /* Avoid Master mode fault MODF */
     spi_enable(SPI1);
 
-    for (i_dummy = 0; i_dummy < 80; i_dummy++)
+    /* >74 clk cycles */
+    for (i_dummy = 0; i_dummy < 10; i_dummy++)
     {
         (void)spi_xfer(SPI1, 0xFF);
     }
