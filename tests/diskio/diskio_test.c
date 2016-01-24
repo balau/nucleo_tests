@@ -19,6 +19,15 @@
 #include <stdio.h>
 #include "diskio.h"
 
+void wait_enter(void)
+{
+    int c;
+
+    do {
+        c = getchar();
+    } while ((c != '\n') && (c != '\r'));
+}
+
 int main(void)
 {
     DSTATUS status;
@@ -27,8 +36,8 @@ int main(void)
 
     printf(
             "diskio_test\n"
-            "Press Enter to continue...");
-    while(getchar() != '\n');
+            "Press Enter to continue...\n");
+    wait_enter();
 
     status = disk_status(pdrv);
     printf("status: 0x%02X\n", status);
