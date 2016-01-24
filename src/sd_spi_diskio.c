@@ -23,11 +23,13 @@
 #define N_PDRV 1
 
 #define SD_STATE_IDLE 0x01
+#define SD_SECTOR_SIZE 512
 
 struct pdrv {
-    int initialized;
-    int present;
-    int write_protected;
+    int initialized:1;
+    int present:1;
+    int write_protected:1;
+    int byte_addressable:1;
 };
 
 static struct pdrv pdrv_data[N_PDRV];
@@ -67,6 +69,7 @@ DSTATUS disk_initialize (BYTE pdrv)
                     (r7[4] != 0xAA) /* check pattern error */
                )
             {
+                /* TODO: SD V1 */
                 status = STA_NODISK;
             }
         }
@@ -93,19 +96,27 @@ DSTATUS disk_initialize (BYTE pdrv)
             if (r3[1] & 0x40)
             {
                 /* high capacity */
-                /* TODO */
+                pdrv_data[pdrv].byte_addressable = 0;
             }
             else
             {
                 /* std capacity */
-                /* TODO */
+                pdrv_data[pdrv].byte_addressable = 1;
+                r1 = sd_send_command_r1(16, SD_SECTOR_SIZE);
+                if (r1 != 0)
+                {
+                    status = STA_NODISK;
+                }
             }
         }
-        pdrv_data[pdrv].initialized = 1;
-        pdrv_data[pdrv].present = 1;
-        /* temporarily protect from write */
-        pdrv_data[pdrv].write_protected = 1;
-        status = STA_PROTECT;
+        if (status == 0)
+        {
+            pdrv_data[pdrv].initialized = 1;
+            pdrv_data[pdrv].present = 1;
+            /* temporarily protect from write */
+            pdrv_data[pdrv].write_protected = 1;
+            status = STA_PROTECT;
+        }
     }
     else
     {
@@ -146,11 +157,65 @@ DSTATUS disk_status (BYTE pdrv)
     return status;
 }
 
+static
+uint32_t get_addr(DWORD sector, int byte_addressable)
+{
+    uint32_t addr;
+
+    if (byte_addressable)
+    {
+        addr = sector * SD_SECTOR_SIZE;
+    }
+    else
+    {
+        addr = sector;
+    }
+
+    return addr;
+}
+
 DRESULT disk_read (BYTE pdrv, BYTE* buff, DWORD sector, UINT count)
 {
     DRESULT result;
 
-    result = RES_ERROR;
+    if (pdrv >= N_PDRV)
+    {
+        result = RES_ERROR;
+    }
+    else if (!pdrv_data[pdrv].initialized)
+    {
+        result = RES_NOTRDY;
+    }
+    else if (!pdrv_data[pdrv].present)
+    {
+        result = RES_ERROR;
+    }
+    else
+    {
+        while (count > 0)
+        {
+            uint32_t addr;
+            uint8_t data_ctrl;
+
+            addr = get_addr(sector, pdrv_data[pdrv].byte_addressable);
+            data_ctrl = sd_read_single_block(addr, buff);
+            if (data_ctrl != 0)
+            {
+                break;
+            }
+            buff += SD_SECTOR_SIZE;
+            sector++;
+            count--;
+        }
+        if (count > 0)
+        {
+            result = RES_ERROR;
+        }
+        else
+        {
+            result = RES_OK;
+        }
+    }
 
     return result;
 }
@@ -172,6 +237,10 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff)
     {
         result = RES_ERROR;
     }
+    else if (!pdrv_data[pdrv].initialized)
+    {
+        result = RES_NOTRDY;
+    }
     else if (!pdrv_data[pdrv].present)
     {
         result = RES_ERROR;
@@ -186,15 +255,15 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff)
                 result = RES_OK;
                 break;
             case GET_SECTOR_COUNT:
-                *buff_dword = 4096; /* TODO, temporarily 2GiB */
+                *buff_dword = 2*1024*(1024/SD_SECTOR_SIZE); /* TODO, temporarily 2GiB */
                 result = RES_OK;
                 break;
             case GET_SECTOR_SIZE:
-                *buff_dword = 512; /* TODO */
+                *buff_dword = SD_SECTOR_SIZE;
                 result = RES_OK;
                 break;
             case GET_BLOCK_SIZE:
-                *buff_dword = 512; /* TODO */
+                *buff_dword = SD_SECTOR_SIZE;
                 result = RES_OK;
                 break;
             case CTRL_TRIM:
