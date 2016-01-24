@@ -17,8 +17,10 @@
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
+#include <stdint.h>
 #include "diskio.h"
 
+static
 void wait_enter(void)
 {
     int c;
@@ -28,16 +30,36 @@ void wait_enter(void)
     } while ((c != '\n') && (c != '\r'));
 }
 
+static
+void print_data(const void *data, size_t n)
+{
+    const uint8_t *bytes;
+    size_t i;
+
+    bytes = data;
+    for (i = 0; i < n; i++)
+    {
+        printf("%02X", bytes[i]);
+        if (((i + 1) % 16) == 0)
+        {
+            printf("\n");
+        }
+    }
+}
+
 int main(void)
 {
     DSTATUS status;
     DRESULT result;
-    BYTE pdrv = 0;
+    BYTE pdrv;
+    uint8_t data[512*2];
 
     printf(
             "diskio_test\n"
             "Press Enter to continue...\n");
     wait_enter();
+
+    pdrv = 0;
 
     status = disk_status(pdrv);
     printf("status: 0x%02X\n", status);
@@ -46,6 +68,12 @@ int main(void)
     status = disk_status(pdrv);
     printf("status: 0x%02X\n", status);
 
+    result = disk_read (pdrv, data, 0, 2);
+    printf("result: 0x%02X\n", result);
+    if (result == RES_OK)
+    {
+        print_data(data, sizeof(data));
+    }
     return 0;
 }
 
