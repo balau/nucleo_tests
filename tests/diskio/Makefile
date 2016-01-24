@@ -22,6 +22,7 @@ OBJS += $(ROOT_DIR)/src/stdio_usart.o
 OBJS += $(ROOT_DIR)/src/syscalls.o
 OBJS += $(ROOT_DIR)/src/file.o
 OBJS += $(ROOT_DIR)/src/sd_spi_diskio.o
+OBJS += $(ROOT_DIR)/src/sd_spi.o
 
 CPPFLAGS += -I$(ROOT_DIR)/ff11a/src
 

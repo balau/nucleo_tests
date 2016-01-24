@@ -16,13 +16,101 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <stdint.h>
 #include "diskio.h"
+#include "sd_spi.h"
+
+#define N_PDRV 1
+
+#define SD_STATE_IDLE 0x01
+
+struct pdrv {
+    int initialized;
+    int present;
+    int write_protected;
+};
+
+static struct pdrv pdrv_data[N_PDRV];
 
 DSTATUS disk_initialize (BYTE pdrv)
 {
     DSTATUS status;
 
-    status = STA_NODISK;
+    status = 0;
+
+    if (pdrv < N_PDRV)
+    {
+        uint8_t r1;
+        uint32_t arg_hcs;
+        int tries;
+
+        sd_init();
+        tries = 4;
+        do {
+            r1 = sd_send_command_r1(0, 0);
+            tries--;
+        } while ((r1 != SD_STATE_IDLE) && (tries > 0));
+        if (r1 != SD_STATE_IDLE)
+        {
+            status = STA_NODISK;
+        }
+        if (status == 0)
+        {
+            uint8_t r7[5];
+
+            sd_send_command(8, 0x1AA, r7, sizeof(r7));
+            if (
+                    (r7[0] != SD_STATE_IDLE) /* state not idle */
+                    ||
+                    ((r7[3]&0x0F) != 0x01) /* not supported voltage range */
+                    ||
+                    (r7[4] != 0xAA) /* check pattern error */
+               )
+            {
+                status = STA_NODISK;
+            }
+        }
+        if (status == 0)
+        {
+            arg_hcs = 0x40000000;
+            tries = 10;
+            do
+            {
+                r1 = sd_send_command_r1(55, 0);
+                r1 = sd_send_command_r1(41, arg_hcs);
+                tries--;
+            } while ((r1 & SD_STATE_IDLE) && (tries > 0));
+            if (r1 & SD_STATE_IDLE)
+            {
+                status = STA_NODISK;
+            }
+        }
+        if (status == 0)
+        {
+            uint8_t r3[5];
+            
+            sd_send_command(58, 0, r3, sizeof(r3));
+            if (r3[1] & 0x40)
+            {
+                /* high capacity */
+                /* TODO */
+            }
+            else
+            {
+                /* std capacity */
+                /* TODO */
+            }
+        }
+        pdrv_data[pdrv].initialized = 1;
+        pdrv_data[pdrv].present = 1;
+        /* temporarily protect from write */
+        pdrv_data[pdrv].write_protected = 1;
+        status = STA_PROTECT;
+    }
+    else
+    {
+        status = STA_NODISK;
+    }
 
     return status;
 }
@@ -31,7 +119,29 @@ DSTATUS disk_status (BYTE pdrv)
 {
     DSTATUS status;
 
-    status = STA_NODISK;
+    if (pdrv < N_PDRV)
+    {
+        if (!pdrv_data[pdrv].initialized)
+        {
+            status = STA_NOINIT;
+        }
+        else if (!pdrv_data[pdrv].present)
+        {
+            status = STA_NODISK;
+        }
+        else if (pdrv_data[pdrv].write_protected)
+        {
+            status = STA_PROTECT;
+        }
+        else
+        {
+            status = 0;
+        }
+    }
+    else
+    {
+        status = STA_NODISK;
+    }
 
     return status;
 }
@@ -58,7 +168,43 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff)
 {
     DRESULT result;
 
-    result = RES_ERROR;
+    if (pdrv >= N_PDRV)
+    {
+        result = RES_ERROR;
+    }
+    else if (!pdrv_data[pdrv].present)
+    {
+        result = RES_ERROR;
+    }
+    else
+    {
+        DWORD *buff_dword = (DWORD *)buff;
+
+        switch(cmd)
+        {
+            case CTRL_SYNC:
+                result = RES_OK;
+                break;
+            case GET_SECTOR_COUNT:
+                *buff_dword = 4096; /* TODO, temporarily 2GiB */
+                result = RES_OK;
+                break;
+            case GET_SECTOR_SIZE:
+                *buff_dword = 512; /* TODO */
+                result = RES_OK;
+                break;
+            case GET_BLOCK_SIZE:
+                *buff_dword = 512; /* TODO */
+                result = RES_OK;
+                break;
+            case CTRL_TRIM:
+                result = RES_OK;
+                break;
+            default:
+                result = RES_PARERR;
+                break;
+        }
+    }
 
     return result;
 }
