@@ -93,12 +93,14 @@ int main(void)
     }
     mbedtls_ssl_conf_authmode( &conf, MBEDTLS_SSL_VERIFY_NONE);
     mbedtls_ssl_conf_ciphersuites( &conf, cipher_list);
+#if 0
     res = mbedtls_ssl_conf_max_frag_len( &conf, MBEDTLS_SSL_MAX_FRAG_LEN_512);
     if( res != 0 )
     {
         mbedtls_printerr(res, "mbedtls_ssl_conf_max_frag_len");
         return 1;
     }
+#endif
     mbedtls_ssl_conf_rng(&conf, wrap_rng, NULL);
     res = mbedtls_ssl_setup( &ssl, &conf);
     if( res != 0 )

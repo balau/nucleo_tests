@@ -73,9 +73,9 @@
 /* For testing with compat.sh */
 #define MBEDTLS_FS_IO
 
-#define MBEDTLS_MPI_MAX_SIZE 512 
-#define MBEDTLS_SSL_MAX_CONTENT_LEN 512
-#define MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
+//#define MBEDTLS_MPI_MAX_SIZE 512 
+//#define MBEDTLS_SSL_MAX_CONTENT_LEN 512
+//#define MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
 #define MBEDTLS_AES_ROM_TABLES
 
 #include "mbedtls/check_config.h"
