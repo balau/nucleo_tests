@@ -39,9 +39,12 @@ int stdio_usart_write(int fd, char *ptr, int len)
 
     f = file_struct_get(fd);
     /* TODO: non-blocking */
-    (void)f;
     for(i = 0; i < len; i++)
     {
+        if (f->isatty && (ptr[i] == '\n'))
+        {
+            usart_send_blocking(USART2, '\r');
+        }
         usart_send_blocking(USART2, ptr[i]);
     }
     return len;
