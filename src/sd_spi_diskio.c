@@ -76,7 +76,13 @@ DSTATUS disk_initialize (BYTE pdrv)
         if (status == 0)
         {
             arg_hcs = 0x40000000;
-            tries = 10;
+            /* timeout should be around 1s.
+             * SPI clk is 125kHz.
+             * a command is around 8 bytes -> 64 SPI clk cycles.
+             * a loop is around 128 SPI clk cycles -> ~1ms
+             * tries = 1000 so it's ~1000ms.
+             */
+            tries = 1000;
             do
             {
                 r1 = sd_send_command_r1(55, 0);

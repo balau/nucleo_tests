@@ -26,13 +26,25 @@
 static
 void sd_select(void)
 {
+    int tries;
+
     gpio_clear(GPIOB, GPIO5); /* lower chip select */
+
+    tries = 125;
+    do {
+        if (spi_xfer(SPI1, 0xFF) == 0xFF)
+        {
+            break;
+        }
+        tries--;
+    } while(tries > 0);
 }
 
 static
 void sd_deselect(void)
 {
     gpio_set(GPIOB, GPIO5); /* raise chip select */
+    (void)spi_xfer(SPI1, 0xFF); /* SD card releases MISO */
 }
 
 static
@@ -98,7 +110,6 @@ void sd_send_command(uint8_t cmd, uint32_t arg, void *resp, size_t len)
     }
 
     sd_deselect();
-    (void)spi_xfer(SPI1, 0xFF);
 }
 
 uint8_t sd_send_command_r1(uint8_t cmd, uint32_t arg)
@@ -149,7 +160,6 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
     }
 
     sd_deselect();
-    (void)spi_xfer(SPI1, 0xFF);
 
     return data_ctrl;
 }
@@ -157,18 +167,19 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
 
 void sd_init(void)
 {
-    int i_dummy;
+    int i_dummy_clk;
+    int spi_clk_khz;
 
     rcc_periph_clock_enable(RCC_SPI1);
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
 
     /* CN9_5 D4 PB5 SD_CS */
-    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO5);
     gpio_set(GPIOB, GPIO5);
+    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO5);
     /* CN5_3 D10 PB6 SPI1_CS */
-    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO6);
     gpio_set(GPIOB, GPIO6);
+    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO6);
     /* CN5_6 D13 PA5 SPI1_SCK */
     gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_SPI1_SCK);
     /* CN5_4 D11 PA7 SPI1_MOSI */
@@ -181,6 +192,7 @@ void sd_init(void)
     gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, GPIO_SPI1_MISO);
 #endif
     
+    spi_clk_khz = 125;
     /* Clock:
      * HSI 8MHz is the default
      * RCC_CFGR_SW = 0b00 -> HSI chosen as SYSCLK
@@ -188,7 +200,7 @@ void sd_init(void)
      * SPI1 is on APB2
      * RCC_CFGR_PRE2 = 0b0000 -> no APB2 prescaler
      * -> FPCLK = 8MHz
-     * -> BR FPCLK/2 -> SCLK @ 4MHz
+     * -> BR FPCLK/64 -> SCLK @ 125kHz
      */
     spi_init_master(
             SPI1,
@@ -202,10 +214,12 @@ void sd_init(void)
     spi_set_nss_high(SPI1); /* Avoid Master mode fault MODF */
     spi_enable(SPI1);
 
-    /* >74 clk cycles */
-    for (i_dummy = 0; i_dummy < 10; i_dummy++)
+    /* >74 clk cycles, >1ms -> >125clk */
+    i_dummy_clk = 0;
+    do
     {
         (void)spi_xfer(SPI1, 0xFF);
-    }
+        i_dummy_clk += 8;
+    } while (i_dummy_clk < 74 || i_dummy_clk < spi_clk_khz);
 }
 
