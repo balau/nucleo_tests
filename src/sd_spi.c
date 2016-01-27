@@ -164,6 +164,22 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
     return data_ctrl;
 }
 
+static
+void sd_spi_init(uint32_t br)
+{
+    spi_init_master(
+            SPI1,
+            br,
+            SPI_CR1_CPOL_CLK_TO_0_WHEN_IDLE,
+            SPI_CR1_CPHA_CLK_TRANSITION_1,
+            SPI_CR1_DFF_8BIT,
+            SPI_CR1_MSBFIRST);
+}
+
+void sd_full_speed(void)
+{
+    sd_spi_init(SPI_CR1_BAUDRATE_FPCLK_DIV_2); /* 4MHz */
+}
 
 void sd_init(void)
 {
@@ -192,7 +208,7 @@ void sd_init(void)
     gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, GPIO_SPI1_MISO);
 #endif
     
-    spi_clk_khz = 125;
+    spi_clk_khz = 250;
     /* Clock:
      * HSI 8MHz is the default
      * RCC_CFGR_SW = 0b00 -> HSI chosen as SYSCLK
@@ -200,21 +216,15 @@ void sd_init(void)
      * SPI1 is on APB2
      * RCC_CFGR_PRE2 = 0b0000 -> no APB2 prescaler
      * -> FPCLK = 8MHz
-     * -> BR FPCLK/64 -> SCLK @ 125kHz
+     * -> BR FPCLK/32 -> SCLK @ 250kHz < 400kHz
      */
-    spi_init_master(
-            SPI1,
-            SPI_CR1_BAUDRATE_FPCLK_DIV_64,
-            SPI_CR1_CPOL_CLK_TO_0_WHEN_IDLE,
-            SPI_CR1_CPHA_CLK_TRANSITION_1,
-            SPI_CR1_DFF_8BIT,
-            SPI_CR1_MSBFIRST);
+    sd_spi_init(SPI_CR1_BAUDRATE_FPCLK_DIV_32);
 
     spi_enable_software_slave_management(SPI1);
     spi_set_nss_high(SPI1); /* Avoid Master mode fault MODF */
     spi_enable(SPI1);
 
-    /* >74 clk cycles, >1ms -> >125clk */
+    /* >74 clk cycles, >1ms -> >250clk */
     i_dummy_clk = 0;
     do
     {

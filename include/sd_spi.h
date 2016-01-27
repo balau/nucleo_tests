@@ -32,6 +32,9 @@ extern
 uint8_t sd_read_single_block(uint32_t address, void *dst);
 
 extern
+void sd_full_speed(void);
+
+extern
 void sd_init(void);
 
 #endif /* SD_SPI_H */
