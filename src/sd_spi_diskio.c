@@ -117,6 +117,7 @@ DSTATUS disk_initialize (BYTE pdrv)
         }
         if (status == 0)
         {
+            sd_full_speed();
             pdrv_data[pdrv].initialized = 1;
             pdrv_data[pdrv].present = 1;
             /* temporarily protect from write */
