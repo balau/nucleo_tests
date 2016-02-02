@@ -81,8 +81,13 @@ void stdio_usart_init(void)
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_USART2);
     
+#ifdef STM32F1
     gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_USART2_TX);
     gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, GPIO_USART2_RX);
+#elif defined(STM32F4)
+    gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO2|GPIO3);
+    gpio_set_af(GPIOA, GPIO_AF7, GPIO2 | GPIO3);
+#endif
 	USART2_BRR = ((2 * rcc_ahb_frequency) + baud) / (2 * baud);
     
 	usart_set_databits(USART2, 8);
