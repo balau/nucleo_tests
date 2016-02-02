@@ -194,7 +194,7 @@ char *inet_ntoa(struct in_addr in)
     b = (uint8_t *)&in.s_addr;
     /* network byte order */
     /* TODO: verify */
-    snprintf(a, INET_ADDRSTRLEN, "%hhu.%hhu.%hhu.%hhu", b[0], b[1], b[2], b[3]);
+    snprintf(a, INET_ADDRSTRLEN, "%" PRIu8 ".%" PRIu8 ".%" PRIu8 ".%" PRIu8, b[0], b[1], b[2], b[3]);
     return a;
 }
 
