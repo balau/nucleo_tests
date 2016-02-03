@@ -30,6 +30,7 @@ OBJS += $(ROOT_DIR)/src/gettimeofday.o
 OBJS += $(ROOT_DIR)/src/getaddrinfo.o
 OBJS += $(ROOT_DIR)/src/select.o
 OBJS += $(ROOT_DIR)/src/poll.o
+OBJS += digicert_der.o
 LDLIBS_SYS =
 
 MBEDTLS_DIR = $(ROOT_DIR)/mbedtls-2.2.0
@@ -39,6 +40,9 @@ LDLIBS += -lmbedtls -lmbedx509 -lmbedcrypto
 CPPFLAGSG += -I$(PWD) -DMBEDTLS_CONFIG_FILE="<mbedtls_nucleo_config.h>"
 
 include ../test.mk
+
+%_der.c: %.der
+	xxd -i $< $@
 
 clean: libmbedtls_clean
 
