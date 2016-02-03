@@ -144,6 +144,7 @@ void w5100_spi_init(void)
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
 
+    gpio_set(GPIOB, GPIO5);
 #ifdef STM32F1
     /* CN5_6 D13 PA5 SPI1_SCK */
     gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_SPI1_SCK);
@@ -153,6 +154,7 @@ void w5100_spi_init(void)
     gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, GPIO_SPI1_MISO);
     /* CN5_3 D10 PB6 SPI1_CS */
     gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO6);
+    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, GPIO5);
 #elif defined(STM32F4)
     /* CN5_6 D13 PA5 SPI1_SCK */
     /* CN5_4 D11 PA7 SPI1_MOSI */
@@ -160,7 +162,8 @@ void w5100_spi_init(void)
     gpio_set_af(GPIOA, GPIO_AF5, GPIO5|GPIO6|GPIO7);
     gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO5|GPIO6|GPIO7);
     /* CN5_3 D10 PB6 SPI1_CS */
-    gpio_mode_setup(GPIOB, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO6);
+    /* CN9_5 D4 PB5 SD_CS */
+    gpio_mode_setup(GPIOB, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO5|GPIO6);
 #endif
     w5100_deselect();
     
