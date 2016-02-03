@@ -42,7 +42,7 @@ CPPFLAGSG += -I$(PWD) -DMBEDTLS_CONFIG_FILE="<mbedtls_nucleo_config.h>"
 include ../test.mk
 
 %_der.c: %.der
-	xxd -i $< $@
+	xxd -i $< |sed 's/\<unsigned\>/const unsigned/g' >$@
 
 clean: libmbedtls_clean
 
