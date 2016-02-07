@@ -67,5 +67,21 @@ void rfc868_timeserver_set(in_addr_t server);
 extern
 in_addr_t rfc868_timeserver_get(void);
 
+/* Get time from a RFC4330 SNTP server.
+ * The time is written in the timespec structure pointed by ts parameter.
+ * Returns 0 if successful, -1 if some error happened. 
+ */
+extern
+int sntp_gettime(struct timespec *ts);
+
+/* Set the time server to retrieve time with RFC4330 */
+extern
+void sntp_timeserver_set(in_addr_t server);
+
+/* Get the time server used to retrieve time with RFC4330 */
+extern
+in_addr_t sntp_timeserver_get(void);
+
+
 #endif /* TIMESYNC_H */
 
