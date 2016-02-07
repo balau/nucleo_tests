@@ -20,6 +20,17 @@
 #include <unistd.h>
 #include "timespec.h"
 
+#define RFC868_TYPE_TCP 1
+#define RFC868_TYPE_UDP 2
+
+#ifndef RFC868_TYPE
+#  define RFC868_TYPE RFC868_TYPE_TCP
+#endif
+
+#if (RFC868_TYPE != RFC868_TYPE_TCP) && (RFC868_TYPE != RFC868_TYPE_UDP)
+#  error "RFC868_TYPE must be one of: RFC868_TYPE_TCP, RFC868_TYPE_UDP"
+#endif
+
 #ifndef DEFAULT_RFC868_SERVER
 /*
  * http://www.inrim.it/ntp/services_i.shtml
@@ -35,7 +46,7 @@ uint32_t rfc868_gettime32(in_addr_t server)
 {
     int sock;
     uint32_t secs;
-
+#if (RFC868_TYPE == RFC868_TYPE_TCP)
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock >= 0)
     {
@@ -72,7 +83,49 @@ uint32_t rfc868_gettime32(in_addr_t server)
     {
         secs = 0;
     }
+#elif (RFC868_TYPE == RFC868_TYPE_UDP)
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock >= 0)
+    {
+        struct sockaddr_in addr;
+        ssize_t sendto_res;
+        uint32_t dummy;
+        size_t len;
 
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(37); /* RFC 868 */
+        addr.sin_addr.s_addr = server;
+
+        dummy = 0;
+        len = sizeof(dummy); /* some interfaces don't send empty datagrams */
+        sendto_res = sendto(sock, &dummy, len, 0, (struct sockaddr *)&addr, sizeof(addr));
+        if (sendto_res == (ssize_t)len)
+        {
+            ssize_t recv_res;
+            uint32_t secs_net;
+
+            recv_res = recv(sock, &secs_net, sizeof(secs_net), 0);
+            if (recv_res == (ssize_t)sizeof(secs_net))
+            {
+                secs = ntohl(secs_net);
+            }
+            else
+            {
+                secs = 0;
+            }
+        }
+        else
+        {
+            secs = 0;
+        }
+        close(sock);
+    }
+    else
+    {
+        secs = 0;
+    }
+
+#endif
     return secs;
 }
 
