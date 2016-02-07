@@ -37,3 +37,6 @@
 *.lst
 *.dis
 
+# Log files
+*.log
+
