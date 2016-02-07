@@ -111,7 +111,10 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
             *tp = *clk;
             fraction_ticks = systick_get_value();
             flag_after = timer_update_flag;
-            /* if they are the same, no systick occurred. */
+            /* if they are the same, no systick occurred.
+             * note that seqlock is unnecessary because
+             * systick is an interrupt, not a thread.
+             */
         } while (flag_before != flag_after);
         systick_fraction_to_timespec(fraction_ticks, &fraction_ts);
         timespec_incr(tp, &fraction_ts);
@@ -137,27 +140,32 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
 {
     int ret;
     volatile struct timespec *clk;
-#warning "TODO: errno instead of return value"
+
     clk = clock_get(clock_id);
     if (clk == NULL)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else if (clock_id == CLOCK_MONOTONIC)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else if (tp == NULL)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else if (tp->tv_nsec < 0)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else if (tp->tv_nsec >= NSECS_IN_SEC)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else
     {
@@ -167,7 +175,10 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
             flag_before = timer_update_flag;
             *clk = *tp;
             flag_after = timer_update_flag;
-            /* if they are the same, no systick occurred. */
+            /* if they are the same, no systick occurred.
+             * note that seqlock is unnecessary because
+             * systick is an interrupt, not a thread.
+             */
         } while (flag_before != flag_after);
         ret = 0;
     }
@@ -181,7 +192,8 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
 
     if (clock_get(clock_id) == NULL)
     {
-        ret = EINVAL;
+        ret = -1;
+        errno = EINVAL;
     }
     else
     {
