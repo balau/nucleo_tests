@@ -21,14 +21,15 @@
 #include "timespec.h"
 
 #define TIMESYNC_METHOD_RFC868 1
+#define TIMESYNC_METHOD_SNTP   2
 
 #ifndef TIMESYNC_METHOD
-#  define TIMESYNC_METHOD TIMESYNC_METHOD_RFC868
+#  define TIMESYNC_METHOD TIMESYNC_METHOD_SNTP
 #endif
 
-#if (TIMESYNC_METHOD != TIMESYNC_METHOD_RFC868)
-/* TODO: SNTP, NTP */
-#  error Supported TIMESYNC_METHOD values: TIMESYNC_METHOD_RFC868
+#if (TIMESYNC_METHOD != TIMESYNC_METHOD_RFC868) && (TIMESYNC_METHOD != TIMESYNC_METHOD_SNTP)
+/* TODO: NTP */
+#  error Supported TIMESYNC_METHOD values: TIMESYNC_METHOD_RFC868 TIMESYNC_METHOD_SNTP
 #endif
 
 #ifndef TIMESYNC_INTERVAL
@@ -68,6 +69,8 @@ int timesync_now_timespec(struct timespec *out)
 
 #if (TIMESYNC_METHOD == TIMESYNC_METHOD_RFC868)
     gettime_ret = rfc868_gettime(&now);
+#elif (TIMESYNC_METHOD == TIMESYNC_METHOD_SNTP)
+    gettime_ret = sntp_gettime(&now);
 #endif
 
     if (gettime_ret == 0)
