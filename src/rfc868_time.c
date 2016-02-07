@@ -24,95 +24,117 @@
 #define RFC868_TYPE_UDP 2
 
 #ifndef RFC868_TYPE
-#  define RFC868_TYPE RFC868_TYPE_TCP
+/* UDP is default because it's lighter on the network.
+ * TCP might be too much to retrieve just 32bit of info.
+ */
+#  define RFC868_TYPE RFC868_TYPE_UDP
 #endif
 
 #if (RFC868_TYPE != RFC868_TYPE_TCP) && (RFC868_TYPE != RFC868_TYPE_UDP)
 #  error "RFC868_TYPE must be one of: RFC868_TYPE_TCP, RFC868_TYPE_UDP"
 #endif
 
-#ifndef DEFAULT_RFC868_SERVER
+/* Some public RFC868 servers. */
 /*
  * http://www.inrim.it/ntp/services_i.shtml
  * time.inrim.it (193.204.114.105)
+ * Note: only TCP seems to work.
  */
-#  define DEFAULT_RFC868_SERVER 0x6972ccc1
+#define RFC868_SERVER_INRIM 0x6972ccc1
+
+/* http://tf.nist.gov/tf-cgi/servers.cgi
+ * time-c.nist.gov (129.6.15.30)
+ */
+#define RFC868_SERVER_NIST_C 0x1e0f0681
+
+/* http://tf.nist.gov/tf-cgi/servers.cgi
+ * utcnist.colorado.edu (128.138.140.44)
+ */
+#define RFC868_SERVER_COLORADO_EDU 0x2c8c8a80
+
+#ifndef DEFAULT_RFC868_SERVER
+#  define DEFAULT_RFC868_SERVER RFC868_SERVER_NIST_C
 #endif
 
 static in_addr_t rfc868_server = DEFAULT_RFC868_SERVER;
+
+static
+uint32_t recv_time32(int sock)
+{
+    uint32_t secs;
+    ssize_t recv_res;
+    uint32_t secs_net;
+
+    recv_res = recv(sock, &secs_net, sizeof(secs_net), 0);
+    if (recv_res == (ssize_t)sizeof(secs_net))
+    {
+        secs = ntohl(secs_net);
+    }
+    else
+    {
+        secs = 0;
+    }
+    return secs;
+}
+
+static
+int rfc868_connect(int sock, in_addr_t server)
+{
+    int res;
+    struct sockaddr_in addr;
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(37); /* RFC 868 */
+    addr.sin_addr.s_addr = server;
+
+#if (RFC868_TYPE == RFC868_TYPE_TCP)
+    res = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+#elif (RFC868_TYPE == RFC868_TYPE_UDP)
+    ssize_t sendto_res;
+    uint8_t dummy;
+    size_t len;
+
+    /* RFC868 says to send an empty datagram but for some interfaces
+     * such as W5100 it's difficult to send empty datagrams, so we
+     * send a byte. */
+    dummy = 0;
+    len = sizeof(dummy); 
+    sendto_res = sendto(sock, &dummy, len, 0, (struct sockaddr *)&addr, sizeof(addr));
+    if (sendto_res == (ssize_t)len)
+    {
+        res = 0;
+    }
+    else
+    {
+        res = -1;
+    }
+#endif
+
+    return res;
+}
 
 static
 uint32_t rfc868_gettime32(in_addr_t server)
 {
     int sock;
     uint32_t secs;
+    int sock_type;
+
 #if (RFC868_TYPE == RFC868_TYPE_TCP)
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    sock_type = SOCK_STREAM;
+#elif (RFC868_TYPE == RFC868_TYPE_UDP)
+    sock_type = SOCK_DGRAM;
+#endif
+
+    sock = socket(AF_INET, sock_type, 0);
     if (sock >= 0)
     {
         int res;
-        struct sockaddr_in addr;
 
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(37); /* RFC 868 */
-        addr.sin_addr.s_addr = server;
-
-        res = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+        res = rfc868_connect(sock, server);
         if (res == 0)
         {
-            ssize_t recv_res;
-            uint32_t secs_net;
-
-            recv_res = recv(sock, &secs_net, sizeof(secs_net), 0);
-            if (recv_res == (ssize_t)sizeof(secs_net))
-            {
-                secs = ntohl(secs_net);
-            }
-            else
-            {
-                secs = 0;
-            }
-        }
-        else
-        {
-            secs = 0;
-        }
-        close(sock);
-    }
-    else 
-    {
-        secs = 0;
-    }
-#elif (RFC868_TYPE == RFC868_TYPE_UDP)
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock >= 0)
-    {
-        struct sockaddr_in addr;
-        ssize_t sendto_res;
-        uint32_t dummy;
-        size_t len;
-
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(37); /* RFC 868 */
-        addr.sin_addr.s_addr = server;
-
-        dummy = 0;
-        len = sizeof(dummy); /* some interfaces don't send empty datagrams */
-        sendto_res = sendto(sock, &dummy, len, 0, (struct sockaddr *)&addr, sizeof(addr));
-        if (sendto_res == (ssize_t)len)
-        {
-            ssize_t recv_res;
-            uint32_t secs_net;
-
-            recv_res = recv(sock, &secs_net, sizeof(secs_net), 0);
-            if (recv_res == (ssize_t)sizeof(secs_net))
-            {
-                secs = ntohl(secs_net);
-            }
-            else
-            {
-                secs = 0;
-            }
+            secs = recv_time32(sock);
         }
         else
         {
@@ -125,7 +147,6 @@ uint32_t rfc868_gettime32(in_addr_t server)
         secs = 0;
     }
 
-#endif
     return secs;
 }
 
