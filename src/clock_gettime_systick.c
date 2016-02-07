@@ -22,6 +22,10 @@
 #include <libopencm3/cm3/systick.h>
 #include "timespec.h"
 
+#ifndef CLOCK_GETTIME_SYNC_DISABLED
+#  include "timesync.h"
+#endif
+
 #define SYSTICK_NSEC 1000000
 #define SYSTICK_FREQ_HZ (NSECS_IN_SEC/SYSTICK_NSEC)
 
@@ -69,6 +73,21 @@ void systick_fraction_to_timespec(uint32_t fraction, struct timespec *tp)
     tp->tv_nsec = ticks * (NSECS_IN_SEC / rcc_ahb_frequency);
 }
 
+#ifndef CLOCK_GETTIME_SYNC_DISABLED
+
+/* Empty default that does nothing, in case
+ * there is no implementation of timesync
+ * linked in the program.
+ */
+__attribute__((__weak__))
+int timesync_timespec(struct timespec *t)
+{
+    (void)t;
+    return 0;
+}
+
+#endif
+
 int clock_gettime(clockid_t clock_id, struct timespec *tp)
 {
     int ret;
@@ -96,6 +115,19 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
         } while (flag_before != flag_after);
         systick_fraction_to_timespec(fraction_ticks, &fraction_ts);
         timespec_incr(tp, &fraction_ts);
+#ifndef CLOCK_GETTIME_SYNC_DISABLED
+        if (clock_id == CLOCK_REALTIME)
+        {
+            int sync_ret;
+
+            /* timesync_timespec does not use clock_gettime,
+             * so that we do not get stuck in a recursion.
+             */
+            sync_ret = timesync_timespec(tp);
+
+            (void)sync_ret; /* ignore */
+        }
+#endif
         ret = 0;
     }
     return ret;
@@ -105,7 +137,7 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
 {
     int ret;
     volatile struct timespec *clk;
-
+#warning "TODO: errno instead of return value"
     clk = clock_get(clock_id);
     if (clk == NULL)
     {
