@@ -256,12 +256,36 @@ int sntp_reply(int sock, struct timespec *ts)
     return res;
 }
 
+static
+int sntp_socket(void)
+{
+    int sock;
+
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock >= 0)
+    {
+        struct timeval timeout = {1, 0}; /* 1s */
+
+        if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(struct timeval)) == -1)
+        {
+            close(sock);
+            sock = -1;
+        }
+        else if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(struct timeval)) == -1)
+        {
+            close(sock);
+            sock = -1;
+        }
+    }
+    return sock;
+}
+
 int sntp_gettime(struct timespec *ts)
 {
     int res;
     int sock;
 
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    sock = sntp_socket();
     if (sock >= 0)
     {
         res = sntp_request(sock, sntp_server);
