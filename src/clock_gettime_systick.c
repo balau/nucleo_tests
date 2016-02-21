@@ -43,6 +43,8 @@ static const struct timespec systick_step = {
     .tv_nsec = SYSTICK_NSEC
 };
 
+static int clock_gettime_mutex;
+
 static
 volatile struct timespec *clock_get(clockid_t clock_id)
 {
@@ -121,14 +123,22 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
 #ifndef CLOCK_GETTIME_SYNC_DISABLED
         if (clock_id == CLOCK_REALTIME)
         {
-            int sync_ret;
-
-            /* timesync_timespec does not use clock_gettime,
+            /* We use clock_gettime_mutex
              * so that we do not get stuck in a recursion.
+             * Note that this Implementation is not completely thread-safe.
              */
-            sync_ret = timesync_timespec(tp);
+            if (!clock_gettime_mutex)
+            {
+                int sync_ret;
 
-            (void)sync_ret; /* ignore */
+                clock_gettime_mutex = 1;
+
+                sync_ret = timesync_timespec(tp);
+
+                (void)sync_ret; /* ignore */
+
+                clock_gettime_mutex = 0;
+            }
         }
 #endif
         ret = 0;
