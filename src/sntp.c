@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include "timespec.h"
 
 /* Some public SNTP servers. */
@@ -46,6 +47,8 @@
 #define SECS_TO_EPOCH 2208988800U
 
 #define NTP_MESSAGE_WORDS (4 + (4*2))
+#define NTP_TRANSMIT_ORIGINATE_OFFSET (4+1*2)
+#define NTP_TRANSMIT_RECEIVE_OFFSET   (4+2*2)
 #define NTP_TRANSMIT_TIMESTAMP_OFFSET (4+3*2)
 
 #define NTP_MODE_BITPOS 24
@@ -106,6 +109,65 @@ void ntp_to_timespec(const struct ntp_timestamp *nt, struct timespec *ts)
 }
 
 static
+void timespec_to_ntp(const struct timespec *ts, struct ntp_timestamp *nt)
+{
+    uint32_t sec;
+    uint32_t nsec;
+    const uint32_t inv_nsecs_in_sec = 281475; /* NSECS_IN_SEC * 2^48 */
+    uint32_t fract;
+    int fract_shift;
+
+    sec = ts->tv_sec + SECS_TO_EPOCH;
+
+    /* nsec goes from 0 to 1e9-1
+     * should convert to a fractional that goes from 0 to 2^32-1
+     * so the conversion is ntp_fract = ts_nsec * 2^32 / 1e9
+     * the second term is a constant, I can express it in Q48
+     * Since ntp_fract is a Q32, ts_nsec must be expressed as Q-16
+     * so we shift by 16.
+     */
+    fract_shift = 16;
+    nsec = lsrr(ts->tv_nsec, fract_shift);
+    fract = nsec * inv_nsecs_in_sec;
+
+    nt->ntp_sec = htonl(sec);
+    nt->ntp_fract = htonl(fract);
+}
+
+static
+void timespec_half(struct timespec *t)
+{
+    if (t->tv_sec & 1)
+    {
+        t->tv_nsec += NSECS_IN_SEC;
+        t->tv_sec--;
+    }
+    t->tv_sec  /= 2;
+    t->tv_nsec /= 2;
+}
+
+static
+void system_clock_estimate(
+        const struct timespec *t1,
+        const struct timespec *t2,
+        const struct timespec *t3,
+        const struct timespec *t4,
+        struct timespec *now)
+{
+    struct timespec t2_1;
+    struct timespec t3_4;
+    struct timespec offset;
+
+    /* system clock offset: t = ((T2 - T1) + (T3 - T4)) / 2 */
+    timespec_diff(t2, t1, &t2_1);
+    timespec_diff(t3, t4, &t3_4);
+    timespec_half(&t2_1);
+    timespec_half(&t3_4);
+    timespec_add(&t2_1, &t3_4, &offset);
+    timespec_add(t4, &offset, now);
+}
+
+static
 int sntp_request(int sock, in_addr_t server)
 {
     int res;
@@ -113,6 +175,8 @@ int sntp_request(int sock, in_addr_t server)
     ssize_t send_res;
     uint32_t ntp_message[NTP_MESSAGE_WORDS];
     uint32_t hdr;
+    struct timespec transmit_ts;
+    struct ntp_timestamp transmit_nt;
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(123);
@@ -123,6 +187,10 @@ int sntp_request(int sock, in_addr_t server)
     hdr |= NTP_MODE_CLIENT<<NTP_MODE_BITPOS;
     hdr |= NTP_VERSION<<NTP_VERSION_BITPOS;
     ntp_message[0] = htonl(hdr);
+
+    clock_gettime(CLOCK_REALTIME, &transmit_ts);
+    timespec_to_ntp(&transmit_ts, &transmit_nt);
+    memcpy(&ntp_message[NTP_TRANSMIT_TIMESTAMP_OFFSET], &transmit_nt, sizeof(transmit_nt));
 
     send_res = sendto(sock, ntp_message, sizeof(ntp_message), 0, (struct sockaddr *)&addr, sizeof(addr));
     if (send_res == sizeof(ntp_message))
@@ -161,9 +229,22 @@ int sntp_reply(int sock, struct timespec *ts)
         else
         {
             struct ntp_timestamp nt;
+            struct timespec t1;
+            struct timespec t2;
+            struct timespec t3;
+            struct timespec t4;
 
+            clock_gettime(CLOCK_REALTIME, &t4);
+
+            memcpy(&nt, &ntp_message[NTP_TRANSMIT_ORIGINATE_OFFSET], sizeof(nt));
+            ntp_to_timespec(&nt, &t1);
+            memcpy(&nt, &ntp_message[NTP_TRANSMIT_RECEIVE_OFFSET], sizeof(nt));
+            ntp_to_timespec(&nt, &t2);
             memcpy(&nt, &ntp_message[NTP_TRANSMIT_TIMESTAMP_OFFSET], sizeof(nt));
-            ntp_to_timespec(&nt, ts);
+            ntp_to_timespec(&nt, &t3);
+
+            system_clock_estimate(&t1, &t2, &t3, &t4, ts);
+
             res = 0;
         }
     }
