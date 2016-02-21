@@ -28,7 +28,7 @@
  * time has passed since last synchronization and in case it executes it,
  * then uses clock_settime to apply the new time setting.
  *
- * timesync_timespec does not use clock_gettime: the current time must be
+ * With timesync_timespec the current time must be
  * passed as parameter. The current time after synchronization is written
  * back in the same parameter.
  *
