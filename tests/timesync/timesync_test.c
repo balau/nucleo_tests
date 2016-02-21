@@ -43,9 +43,9 @@ int main(void)
             "Press any key to continue...\n");
     getchar();
 
-    t = TIMESPEC_INFINITY;
+    t = TIMESPEC_ZERO;
     res = timesync_timespec(&t);
-    printf("timesync_timespec(TIMESPEC_INFINITY) returned %d\n", res);
+    printf("timesync_timespec(TIMESPEC_ZERO) returned %d\n", res);
     clock_gettime(CLOCK_REALTIME, &t);
     print_timespec(&t);
     res = timesync();
