@@ -23,6 +23,11 @@
 #include <libopencm3/stm32/spi.h>
 #include <libopencm3/stm32/gpio.h>
 
+#define DATA_CTRL_START 0xFE
+#define DATA_IDLE 0xFF
+#define DATA_DUMMY 0xFF
+#define BLOCK_SIZE 512
+
 static
 void sd_select(void)
 {
@@ -32,7 +37,7 @@ void sd_select(void)
 
     tries = 125;
     do {
-        if (spi_xfer(SPI1, 0xFF) == 0xFF)
+        if (spi_xfer(SPI1, DATA_DUMMY) == DATA_IDLE)
         {
             break;
         }
@@ -44,7 +49,7 @@ static
 void sd_deselect(void)
 {
     gpio_set(GPIOB, GPIO5); /* raise chip select */
-    (void)spi_xfer(SPI1, 0xFF); /* SD card releases MISO */
+    (void)spi_xfer(SPI1, DATA_IDLE); /* SD card releases MISO */
 }
 
 static
@@ -89,26 +94,45 @@ void send_cmd(uint8_t cmd, uint32_t arg)
     (void)spi_xfer(SPI1, crc7);
 }
 
-void sd_send_command(uint8_t cmd, uint32_t arg, void *resp, size_t len)
+static
+int line_is_idle(uint8_t data)
+{
+    return ((data & 0x80) != 0);
+}
+
+static
+uint8_t wait_resp(void)
+{
+    uint8_t r;
+
+    do
+    {
+        r = spi_xfer(SPI1, DATA_DUMMY);
+    } while (line_is_idle(r));
+
+    return r;
+}
+
+static
+void sd_send_command_inner(uint8_t cmd, uint32_t arg, void *resp, size_t len)
 {
     uint8_t *resp_bytes;
     size_t i_byte;
 
-    sd_select();
     send_cmd(cmd, arg);
     resp_bytes = resp;
 
-    for (i_byte = 0; i_byte < len; i_byte++)
+    resp_bytes[0] = wait_resp();
+    for (i_byte = 1; i_byte < len; i_byte++)
     {
-        uint8_t r;
-        do
-        {
-            r = spi_xfer(SPI1, 0xFF);
-        } while (((r & 0x80) == 0x80) && (i_byte == 0));
-
-        resp_bytes[i_byte] = r;
+        resp_bytes[i_byte] = spi_xfer(SPI1, DATA_DUMMY);
     }
+}
 
+void sd_send_command(uint8_t cmd, uint32_t arg, void *resp, size_t len)
+{
+    sd_select();
+    sd_send_command_inner(cmd, arg, resp, len);
     sd_deselect();
 }
 
@@ -121,7 +145,6 @@ uint8_t sd_send_command_r1(uint8_t cmd, uint32_t arg)
     return r1;
 }
 
-extern
 uint8_t sd_read_single_block(uint32_t address, void *dst)
 {
     uint8_t *dst_bytes;
@@ -132,16 +155,13 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
     send_cmd(17, address);
     dst_bytes = dst;
 
+    r1 = wait_resp();
+    /* TODO: Check r1 */
     do
     {
-        r1 = spi_xfer(SPI1, 0xFF);
-    } while (r1 & 0x80);
-    
-    do
-    {
-        data_ctrl = spi_xfer(SPI1, 0xFF);
-    } while (data_ctrl == 0xFF);
-    if (data_ctrl == 0xFE)
+        data_ctrl = spi_xfer(SPI1, DATA_DUMMY);
+    } while (data_ctrl == DATA_IDLE);
+    if (data_ctrl == DATA_CTRL_START)
     {
         int i_byte;
         uint8_t crc16_hi;
@@ -149,12 +169,13 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
 
         data_ctrl = 0;
 
-        for (i_byte = 0; i_byte < 512; i_byte++)
+        for (i_byte = 0; i_byte < BLOCK_SIZE; i_byte++)
         {
-            dst_bytes[i_byte] = spi_xfer(SPI1, 0xFF);
+            dst_bytes[i_byte] = spi_xfer(SPI1, DATA_DUMMY);
         }
-        crc16_hi = spi_xfer(SPI1, 0xFF);
-        crc16_lo = spi_xfer(SPI1, 0xFF);
+        crc16_hi = spi_xfer(SPI1, DATA_DUMMY);
+        crc16_lo = spi_xfer(SPI1, DATA_DUMMY);
+        /* crc16: don't care. TODO: care. */
         (void)crc16_hi;
         (void)crc16_lo;
     }
@@ -162,6 +183,44 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
     sd_deselect();
 
     return data_ctrl;
+}
+
+uint16_t sd_write_single_block(uint32_t address, const void *src)
+{
+    const uint8_t *src_bytes;
+    uint8_t r1;
+    int i_byte;
+    uint8_t data_resp;
+    uint8_t busy;
+    uint16_t r2;
+
+    sd_select();
+    send_cmd(24, address);
+    src_bytes = src;
+
+    r1 = wait_resp();
+    /* TODO: Check r1 */
+    (void)spi_xfer(SPI1, DATA_CTRL_START);
+    for (i_byte = 0; i_byte < BLOCK_SIZE; i_byte++)
+    {
+        (void)spi_xfer(SPI1, src_bytes[i_byte]);
+    }
+    /* crc16: don't care. TODO: care. */
+    (void)spi_xfer(SPI1, DATA_DUMMY); 
+    (void)spi_xfer(SPI1, DATA_DUMMY);
+
+    data_resp = spi_xfer(SPI1, DATA_DUMMY);
+    /* TODO: check data_resp */
+    do
+    {
+        busy = spi_xfer(SPI1, DATA_DUMMY);
+    } while (busy != DATA_IDLE); /* TODO: timeout */
+
+    sd_send_command_inner(13, 0, &r2, 2);
+
+    sd_deselect();
+
+    return r2;
 }
 
 static
