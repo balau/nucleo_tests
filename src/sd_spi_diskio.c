@@ -120,9 +120,13 @@ DSTATUS disk_initialize (BYTE pdrv)
             sd_full_speed();
             pdrv_data[pdrv].initialized = 1;
             pdrv_data[pdrv].present = 1;
-            /* temporarily protect from write */
+#ifndef SD_SPI_DISKIO_READONLY
+            pdrv_data[pdrv].write_protected = 0;
+            status = 0;
+#else
             pdrv_data[pdrv].write_protected = 1;
             status = STA_PROTECT;
+#endif
         }
     }
     else
@@ -231,7 +235,48 @@ DRESULT disk_write (BYTE pdrv, const BYTE* buff, DWORD sector, UINT count)
 {
     DRESULT result;
 
-    result = RES_ERROR;
+    if (pdrv >= N_PDRV)
+    {
+        result = RES_ERROR;
+    }
+    else if (!pdrv_data[pdrv].initialized)
+    {
+        result = RES_NOTRDY;
+    }
+    else if (!pdrv_data[pdrv].present)
+    {
+        result = RES_ERROR;
+    }
+    else if (pdrv_data[pdrv].write_protected)
+    {
+        result = RES_ERROR;
+    }
+    else
+    {
+        while (count > 0)
+        {
+            uint32_t addr;
+            int write_res;
+
+            addr = get_addr(sector, pdrv_data[pdrv].byte_addressable);
+            write_res = sd_write_single_block(addr, buff);
+            if (write_res != 0)
+            {
+                break;
+            }
+            buff += SD_SECTOR_SIZE;
+            sector++;
+            count--;
+        }
+        if (count > 0)
+        {
+            result = RES_ERROR;
+        }
+        else
+        {
+            result = RES_OK;
+        }
+    }
 
     return result;
 }
