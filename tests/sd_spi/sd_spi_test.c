@@ -44,6 +44,7 @@ int main(void)
     uint32_t arg_hcs;
     uint8_t block[512];
     int tries;
+    int read_res;
 
     
     printf("SD card SPI initialization...");
@@ -112,14 +113,14 @@ int main(void)
     //sd_send_command(13, 0, r2, sizeof(r2));
     //print_resp(13, r2, sizeof(r2));
 
-    r1 = sd_read_single_block(0, block);
-    if (r1 == 0)
+    read_res = sd_read_single_block(0, block);
+    if (read_res == 0)
     {
         print_resp(17, block, sizeof(block));
     }
     else
     {
-        print_resp(17, &r1, 1);
+        print_resp(17, &read_res, sizeof(read_res));
     }
 
     sd_send_command(13, 0, r2, sizeof(r2));

@@ -24,6 +24,8 @@
 #include <libopencm3/stm32/gpio.h>
 
 #define DATA_CTRL_START 0xFE
+#define DATA_RESP_MASK 0x1F
+#define DATA_RESP_ACCEPTED 0x05
 #define DATA_IDLE 0xFF
 #define DATA_DUMMY 0xFF
 #define BLOCK_SIZE 512
@@ -145,22 +147,32 @@ uint8_t sd_send_command_r1(uint8_t cmd, uint32_t arg)
     return r1;
 }
 
-uint8_t sd_read_single_block(uint32_t address, void *dst)
+static
+int send_rw_cmd(uint8_t cmd, uint32_t address)
 {
-    uint8_t *dst_bytes;
     uint8_t r1;
-    uint8_t data_ctrl;
 
-    sd_select();
-    send_cmd(17, address);
-    dst_bytes = dst;
+    send_cmd(cmd, address);
 
     r1 = wait_resp();
-    /* TODO: Check r1 */
+
+    return (r1 == 0x00)?0:-1;
+}
+
+static
+int read_block(void *dst)
+{
+    int res;
+    uint8_t *dst_bytes;
+    uint8_t data_ctrl;
+
+    dst_bytes = dst;
+
     do
     {
         data_ctrl = spi_xfer(SPI1, DATA_DUMMY);
-    } while (data_ctrl == DATA_IDLE);
+    } while (data_ctrl == DATA_IDLE); /* TODO: timeout */
+
     if (data_ctrl == DATA_CTRL_START)
     {
         int i_byte;
@@ -178,28 +190,41 @@ uint8_t sd_read_single_block(uint32_t address, void *dst)
         /* crc16: don't care. TODO: care. */
         (void)crc16_hi;
         (void)crc16_lo;
+
+        res = 0;
+    }
+    else
+    {
+        res = -1;
     }
 
-    sd_deselect();
-
-    return data_ctrl;
+    return res;
 }
 
-uint16_t sd_write_single_block(uint32_t address, const void *src)
+int sd_read_single_block(uint32_t address, void *dst)
 {
-    const uint8_t *src_bytes;
-    uint8_t r1;
-    int i_byte;
-    uint8_t data_resp;
-    uint8_t busy;
-    uint16_t r2;
+    int res;
 
     sd_select();
-    send_cmd(24, address);
+    res = send_rw_cmd(17, address);
+    if (res == 0)
+    {
+        res = read_block(dst);
+    }
+    sd_deselect();
+
+    return res;
+}
+
+static
+int send_block(const void *src)
+{
+    const uint8_t *src_bytes;
+    int i_byte;
+    uint8_t data_resp;
+
     src_bytes = src;
 
-    r1 = wait_resp();
-    /* TODO: Check r1 */
     (void)spi_xfer(SPI1, DATA_CTRL_START);
     for (i_byte = 0; i_byte < BLOCK_SIZE; i_byte++)
     {
@@ -210,7 +235,16 @@ uint16_t sd_write_single_block(uint32_t address, const void *src)
     (void)spi_xfer(SPI1, DATA_DUMMY);
 
     data_resp = spi_xfer(SPI1, DATA_DUMMY);
-    /* TODO: check data_resp */
+
+    return ((data_resp & DATA_RESP_MASK) == DATA_RESP_ACCEPTED)?0:-1;
+}
+
+static
+int wait_end_write(void)
+{
+    uint8_t busy;
+    uint16_t r2;
+
     do
     {
         busy = spi_xfer(SPI1, DATA_DUMMY);
@@ -218,9 +252,26 @@ uint16_t sd_write_single_block(uint32_t address, const void *src)
 
     sd_send_command_inner(13, 0, &r2, 2);
 
+    return (r2 == 0x0000)?0:-1;
+}
+
+int sd_write_single_block(uint32_t address, const void *src)
+{
+    int res;
+
+    sd_select();
+    res = send_rw_cmd(24, address);
+    if (res == 0)
+    {
+        res = send_block(src);
+    }
+    if (res == 0)
+    {
+        res = wait_end_write();
+    }
     sd_deselect();
 
-    return r2;
+    return res;
 }
 
 static

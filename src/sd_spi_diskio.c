@@ -202,11 +202,11 @@ DRESULT disk_read (BYTE pdrv, BYTE* buff, DWORD sector, UINT count)
         while (count > 0)
         {
             uint32_t addr;
-            uint8_t data_ctrl;
+            int read_res;
 
             addr = get_addr(sector, pdrv_data[pdrv].byte_addressable);
-            data_ctrl = sd_read_single_block(addr, buff);
-            if (data_ctrl != 0)
+            read_res = sd_read_single_block(addr, buff);
+            if (read_res != 0)
             {
                 break;
             }

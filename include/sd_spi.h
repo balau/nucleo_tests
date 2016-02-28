@@ -29,10 +29,10 @@ extern
 void sd_send_command(uint8_t cmd, uint32_t arg, void *resp, size_t len);
 
 extern
-uint8_t sd_read_single_block(uint32_t address, void *dst);
+int sd_read_single_block(uint32_t address, void *dst);
 
 extern
-uint16_t sd_write_single_block(uint32_t address, const void *src);
+int sd_write_single_block(uint32_t address, const void *src);
 
 extern
 void sd_full_speed(void);
