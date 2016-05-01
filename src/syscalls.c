@@ -22,8 +22,10 @@
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
-#include <file.h>
+#include "file.h"
+#include "fatfs.h"
 
+int _open(const char *pathname, int flags);
 int _fstat(int fd, struct stat *buf);
 int _write (int fd, char *ptr, int len);
 int _read (int fd, char *ptr, int len);
@@ -33,6 +35,19 @@ int _isatty(int fd);
 _off_t _lseek(int fd, _off_t offset, int whence );
 pid_t _getpid(void);
 int _kill(pid_t pid, int sig);
+
+
+int _open(const char *pathname, int flags)
+{
+    int ret;
+
+    /* TODO: choose driver */
+    /* TODO: stdin, stdout, stderr */
+
+    ret = fatfs_open(pathname, flags);
+
+    return ret;
+}
 
 int _write (int fd, char *ptr, int len)
 {
