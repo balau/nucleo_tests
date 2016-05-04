@@ -16,12 +16,16 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <limits.h>
 #include <fcntl.h>
 #include "fatfs.h"
 #include "file.h"
 #include "ff.h"
+
+/* Macro definitions */
 
 /* Function prototypes */
 
@@ -56,7 +60,10 @@ void fill_fd(int fildes, FIL *fp);
 
 static FATFS fs;
 
-static FIL files[0];
+static struct {
+    int allocated;
+    FIL fil;
+    } files[OPEN_MAX];
 
 /* static functions */
 
@@ -136,14 +143,39 @@ BYTE flags2mode(int flags)
 static
 FIL *fatfs_fil_alloc(void)
 {
-    /* TODO */
-    return NULL;
+    int i_fil;
+    FIL *f;
+
+    f = NULL;
+    for (i_fil = 0; i_fil < OPEN_MAX; i_fil++)
+    {
+        if (!files[i_fil].allocated)
+        {
+            files[i_fil].allocated = 1;
+            f = &files[i_fil].fil;
+            break;
+        }
+    }
+
+    return f;
 }
 
 static
 void fatfs_fil_free(FIL *fp)
 {
     /* TODO */
+    int i_fil;
+
+    for (i_fil = 0; i_fil < OPEN_MAX; i_fil++)
+    {
+        if (files[i_fil].allocated && (fp == &files[i_fil].fil))
+        {
+            files[i_fil].allocated = 0;
+            memset(&files[i_fil].fil, 0, sizeof(files[i_fil].fil));
+            break;
+        }
+    }
+
 }
 
 static
