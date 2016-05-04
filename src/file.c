@@ -25,17 +25,6 @@
 #include <file.h>
 #include <limits.h>
 
-#ifndef OPEN_MAX
-/* We redefine OPEN_MAX here: its definition is what happens in this C source file. */
-#  ifdef _POSIX_OPEN_MAX
-#    warning "We needed OPEN_MAX from limits.h; using _POSIX_OPEN_MAX"
-#    define OPEN_MAX _POSIX_OPEN_MAX
-#  else
-#    warning "We needed OPEN_MAX from limits.h;  assuming 20 which is _POSIX_OPEN_MAX in POSIX.1-2008"
-#    define OPEN_MAX 20
-#  endif
-#endif
-
 static
 struct fd files[OPEN_MAX];
 

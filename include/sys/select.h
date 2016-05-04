@@ -29,17 +29,7 @@
 #include <time.h>
 #include <limits.h>
 
-#ifndef OPEN_MAX
-#  ifdef _POSIX_OPEN_MAX
-#    warning "We needed OPEN_MAX to set FD_SETSIZE; using _POSIX_OPEN_MAX"
-#    define FD_SETSIZE _POSIX_OPEN_MAX
-#  else
-#    warning "We needed OPEN_MAX to set FD_SETSIZE; assuming 20 which is _POSIX_OPEN_MAX in POSIX.1-2008"
-#    define FD_SETSIZE 20
-#  endif
-#else
-#  define FD_SETSIZE OPEN_MAX
-#endif
+#define FD_SETSIZE OPEN_MAX
 
 struct fd_set_s {
     unsigned long mask[(FD_SETSIZE + (8*sizeof(unsigned long)) - 1) / (8*sizeof(unsigned long))];
