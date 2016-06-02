@@ -54,7 +54,7 @@ static
 void fatfs_fil_free(FIL *fp);
 
 static
-void fill_fd(int fildes, FIL *fp);
+void fill_fd(int fildes, FIL *fp, int flags);
 
 /* static variables */
 
@@ -196,9 +196,46 @@ void fatfs_fil_free(FIL *fp)
 static
 int fatfs_write (int fd, char *ptr, int len)
 {
-    /* TODO */
-    errno = EINVAL;
-    return -1;
+    int ret;
+    struct fd *pfd;
+
+    pfd = file_struct_get(fd);
+
+    if (pfd == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if (pfd->opaque == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else
+    {
+        /* TODO: check also if file type is fatfs */
+
+        FIL *filp;
+        FRESULT result;
+        UINT written;
+
+        filp = pfd->opaque;
+
+        /* TODO: manage append */
+
+        result = f_write(filp, ptr, len, &written);
+        if (result == FR_OK)
+        {
+            ret = written;
+        }
+        else
+        {
+            errno = fresult2errno(result);
+            ret = -1;
+        }
+    }
+
+    return ret;
 }
 
 static
@@ -255,7 +292,7 @@ int fatfs_close (int fd)
 }
 
 static
-void fill_fd(int fildes, FIL *fp)
+void fill_fd(int fildes, FIL *fp, int flags)
 {
     struct fd *pfd;
     struct stat s;
@@ -312,7 +349,7 @@ int fatfs_open(const char *pathname, int flags)
         result = f_open(fp, pathname, mode);
         if (result == FR_OK)
         {
-            fill_fd(fildes, fp);
+            fill_fd(fildes, fp, flags);
             ret = fildes;
         }
         else
