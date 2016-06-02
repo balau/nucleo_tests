@@ -66,7 +66,13 @@ static
 int fatfs_fildir_free(void *p);
 
 static
-void fill_fd_fil(int fildes, FIL *fp, const FILINFO *fno);
+void fill_fd_fil(int fildes, FIL *fp, int flags, const FILINFO *fno);
+
+static
+void fill_fd_dir(int fildes, DIR *fp, int flags, const FILINFO *fno);
+
+static
+void fill_fd(struct fd *pfd, int flags, const FILINFO *fno);
 
 /* static variables */
 
@@ -441,13 +447,15 @@ int fatfs_close (int fd)
 }
 
 static
-void fill_fd(struct fd *pfd, const FILINFO *fno)
+void fill_fd(struct fd *pfd, int flags, const FILINFO *fno)
 {
     mode_t mode;
 
     pfd->isatty = 0;
     pfd->isopen = 1;
     pfd->close = fatfs_close;
+    pfd->status_flags = flags;
+    pfd->descriptor_flags = 0;
     memset(&pfd->stat, 0, sizeof(struct stat));
     pfd->stat.st_size = fno->fsize;
     if ((fno->fattrib & AM_MASK) & AM_DIR)
@@ -479,24 +487,24 @@ void fill_fd(struct fd *pfd, const FILINFO *fno)
 }
 
 static
-void fill_fd_fil(int fildes, FIL *fp, const FILINFO *fno)
+void fill_fd_fil(int fildes, FIL *fp, int flags, const FILINFO *fno)
 {
     struct fd *pfd;
 
     pfd = file_struct_get(fildes);
 
-    fill_fd(pfd, fno);
+    fill_fd(pfd, flags, fno);
     pfd->opaque = fp;
 }
 
 static
-void fill_fd_dir(int fildes, DIR *fp, const FILINFO *fno)
+void fill_fd_dir(int fildes, DIR *fp, int flags, const FILINFO *fno)
 {
     struct fd *pfd;
 
     pfd = file_struct_get(fildes);
 
-    fill_fd(pfd, fno);
+    fill_fd(pfd, flags, fno);
     pfd->opaque = fp;
 }
 
@@ -519,7 +527,7 @@ FRESULT fatfs_open_file(const char *pathname, int flags, int fildes, const FILIN
         result = f_open(fp, pathname, mode);
         if (result == FR_OK)
         {
-            fill_fd_fil(fildes, fp, fno);
+            fill_fd_fil(fildes, fp, flags, fno);
         }
         else
         {
@@ -531,7 +539,7 @@ FRESULT fatfs_open_file(const char *pathname, int flags, int fildes, const FILIN
 }
 
 static
-FRESULT fatfs_open_dir(const char *pathname, int fildes, const FILINFO *fno)
+FRESULT fatfs_open_dir(const char *pathname, int flags, int fildes, const FILINFO *fno)
 {
     FRESULT result;
     DIR *fp;
@@ -547,7 +555,7 @@ FRESULT fatfs_open_dir(const char *pathname, int fildes, const FILINFO *fno)
         result = f_opendir(fp, pathname);
         if (result == FR_OK)
         {
-            fill_fd_dir(fildes, fp, fno);
+            fill_fd_dir(fildes, fp, flags, fno);
         }
         else
         {
@@ -571,7 +579,7 @@ FRESULT fatfs_open_file_or_dir(const char *pathname, int flags, int fildes)
     }
     else if ((fno.fattrib & AM_MASK) & AM_DIR)
     {
-        result = fatfs_open_dir(pathname, fildes, &fno);
+        result = fatfs_open_dir(pathname, flags, fildes, &fno);
     }
     else
     {
