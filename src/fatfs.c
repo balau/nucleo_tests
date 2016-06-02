@@ -744,6 +744,50 @@ int fatfs_unlink(const char *path)
     return ret;
 }
 
+int fatfs_fsync(int fd)
+{
+    int ret;
+    struct fd *pfd;
+
+    pfd = file_struct_get(fd);
+
+    if (pfd == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if (pfd->opaque == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if (S_ISREG(pfd->stat.st_mode))
+    {
+        FIL *filp;
+        FRESULT result;
+
+        filp = pfd->opaque;
+
+        result = f_sync(filp);
+        if (result == FR_OK)
+        {
+            ret = 0;
+        }
+        else
+        {
+            errno = fresult2errno(result);
+            ret = -1;
+        }
+    }
+    else
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+
+    return ret;
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {

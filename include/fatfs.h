@@ -30,5 +30,8 @@ off_t fatfs_lseek(int fd, off_t offset, int whence );
 extern
 int fatfs_unlink(const char *path);
 
+extern
+int fatfs_fsync(int fd);
+
 #endif /* FATFS_H */
 
