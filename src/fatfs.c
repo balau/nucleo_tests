@@ -66,7 +66,7 @@ static
 int fatfs_fildir_free(void *p);
 
 static
-void fill_fd_file(int fildes, FIL *fp, const FILINFO *fno);
+void fill_fd_fil(int fildes, FIL *fp, const FILINFO *fno);
 
 /* static variables */
 
@@ -457,7 +457,18 @@ void fill_fd(struct fd *pfd, const FILINFO *fno)
 }
 
 static
-void fill_fd_file(int fildes, FIL *fp, const FILINFO *fno)
+void fill_fd_fil(int fildes, FIL *fp, const FILINFO *fno)
+{
+    struct fd *pfd;
+
+    pfd = file_struct_get(fildes);
+
+    fill_fd(pfd, fno);
+    pfd->opaque = fp;
+}
+
+static
+void fill_fd_dir(int fildes, DIR *fp, const FILINFO *fno)
 {
     struct fd *pfd;
 
@@ -486,7 +497,7 @@ FRESULT fatfs_open_file(const char *pathname, int flags, int fildes, const FILIN
         result = f_open(fp, pathname, mode);
         if (result == FR_OK)
         {
-            fill_fd_file(fildes, fp, fno);
+            fill_fd_fil(fildes, fp, fno);
         }
         else
         {
@@ -498,11 +509,29 @@ FRESULT fatfs_open_file(const char *pathname, int flags, int fildes, const FILIN
 }
 
 static
-FRESULT fatfs_open_dir(const char *pathname, int flags, int fildes, const FILINFO *fno)
+FRESULT fatfs_open_dir(const char *pathname, int fildes, const FILINFO *fno)
 {
     FRESULT result;
+    DIR *fp;
 
-    result = FR_INT_ERR;
+    fp = fatfs_dir_alloc();
+
+    if (fp == NULL)
+    {
+        result = FR_TOO_MANY_OPEN_FILES;
+    }
+    else
+    {
+        result = f_opendir(fp, pathname);
+        if (result == FR_OK)
+        {
+            fill_fd_dir(fildes, fp, fno);
+        }
+        else
+        {
+            fatfs_dir_free(fp);
+        }
+    }
 
     return result;
 }
@@ -520,7 +549,7 @@ FRESULT fatfs_open_file_or_dir(const char *pathname, int flags, int fildes)
     }
     else if ((fno.fattrib & AM_MASK) & AM_DIR)
     {
-        result = fatfs_open_dir(pathname, flags, fildes, &fno);
+        result = fatfs_open_dir(pathname, fildes, &fno);
     }
     else
     {
