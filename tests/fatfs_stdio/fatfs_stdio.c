@@ -79,16 +79,32 @@ int main(void)
     }
     else
     {
-        char *presult;
-
-        presult = fgets(message, sizeof(message) - 1, fin);
-        if (presult == NULL)
+        while (!feof(fin))
         {
-            perror(filepath);
-            return 1;
+            size_t nbytes;
+            char *p;
+
+            nbytes = fread(message, 1, sizeof(message), fin);
+            if(ferror(fin))
+            {
+                perror(filepath);
+                fclose(fin);
+                return 1;
+            }
+            p = message;
+            while (nbytes > 0)
+            {
+                size_t nwritten;
+                nwritten = fwrite(p, 1, nbytes, stdout);
+                if (nwritten > 0)
+                {
+                    nbytes -= nwritten;
+                    p += nwritten;
+                }
+            }
         }
-        puts(message);
     }
+    printf("\nftell = %ld.\n", ftell(fin));
     result = fclose(fin);
     if (result != 0)
     {
