@@ -37,7 +37,6 @@ int _unlink(const char *path);
 pid_t _getpid(void);
 int _kill(pid_t pid, int sig);
 
-
 int _open(const char *pathname, int flags)
 {
     int ret;
@@ -249,6 +248,11 @@ _off_t _lseek(int fd, _off_t offset, int whence )
 int _unlink(const char *path)
 {
     return fatfs_unlink(path);
+}
+
+int fsync(int fd)
+{
+    return fatfs_fsync(fd);
 }
 
 void _exit(int code)
