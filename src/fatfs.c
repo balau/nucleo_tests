@@ -662,6 +662,69 @@ int fatfs_open(const char *pathname, int flags)
     return ret;
 }
 
+off_t fatfs_lseek(int fd, off_t offset, int whence )
+{
+    off_t ret;
+    struct fd *pfd;
+
+    pfd = file_struct_get(fd);
+
+    if (pfd == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if (pfd->opaque == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if (S_ISREG(pfd->stat.st_mode))
+    {
+        FIL *filp;
+        FRESULT result;
+        DWORD pos;
+
+        filp = pfd->opaque;
+        if (whence == SEEK_CUR)
+        {
+            pos = f_tell(filp);
+        }
+        else if (whence == SEEK_END)
+        {
+            pos = f_size(filp);
+        }
+        else if (whence == SEEK_CUR)
+        {
+            pos = 0;
+        }
+        else
+        {
+            /* TODO: error */
+            pos = 0;
+        }
+        pos += offset;
+
+        result = f_lseek(filp, pos);
+        if (result == FR_OK)
+        {
+            ret = pos;
+        }
+        else
+        {
+            errno = fresult2errno(result);
+            ret = -1;
+        }
+    }
+    else
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+
+    return ret;
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {

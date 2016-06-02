@@ -19,8 +19,13 @@
 #ifndef FATFS_H
 #define FATFS_H
 
+#include <unistd.h>
+
 extern
 int fatfs_open(const char *pathname, int flags);
+
+extern
+off_t fatfs_lseek(int fd, off_t offset, int whence );
 
 #endif /* FATFS_H */
 

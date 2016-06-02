@@ -227,14 +227,18 @@ _off_t _lseek(int fd, _off_t offset, int whence )
         errno = EBADF;
         ret = -1;
     }
+    else if (S_ISREG(f->stat.st_mode))
+    {
+        ret = fatfs_lseek(fd, offset, whence);
+    }
     else
     {
-        /* TODO */
         (void)offset;
         (void)whence;
-        errno = ESPIPE;
+        errno = EINVAL;
         ret = -1;
     }
+
     return ret;
 }
 
