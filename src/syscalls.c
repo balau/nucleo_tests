@@ -33,6 +33,7 @@ void * _sbrk (ptrdiff_t incr);
 int _close(int fd);
 int _isatty(int fd);
 _off_t _lseek(int fd, _off_t offset, int whence );
+int _unlink(const char *path);
 pid_t _getpid(void);
 int _kill(pid_t pid, int sig);
 
@@ -243,6 +244,11 @@ _off_t _lseek(int fd, _off_t offset, int whence )
     }
 
     return ret;
+}
+
+int _unlink(const char *path)
+{
+    return fatfs_unlink(path);
 }
 
 void _exit(int code)
