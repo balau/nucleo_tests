@@ -241,9 +241,44 @@ int fatfs_write (int fd, char *ptr, int len)
 static
 int fatfs_read (int fd, char *ptr, int len)
 {
-    /* TODO */
-    errno = EINVAL;
-    return -1;
+    int ret;
+    struct fd *pfd;
+
+    pfd = file_struct_get(fd);
+
+    if (pfd == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else if (pfd->opaque == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
+    else
+    {
+        /* TODO: check also if file type is fatfs */
+
+        FIL *filp;
+        FRESULT result;
+        UINT nbytes_read;
+
+        filp = pfd->opaque;
+
+        result = f_read(filp, ptr, len, &nbytes_read);
+        if (result == FR_OK)
+        {
+            ret = nbytes_read;
+        }
+        else
+        {
+            errno = fresult2errno(result);
+            ret = -1;
+        }
+    }
+
+    return ret;
 }
 
 static
