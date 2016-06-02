@@ -62,6 +62,13 @@ int main(void)
             return 1;
         }
     }
+    result = fflush(fout);
+    if (result != 0)
+    {
+        perror(filepath);
+        return 1;
+    }
+    printf("\nftell = %ld.\n", ftell(fout));
     result = fclose(fout);
     if (result != 0)
     {
