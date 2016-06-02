@@ -309,19 +309,30 @@ int fatfs_write (int fd, char *ptr, int len)
         errno = EBADF;
         ret = -1;
     }
-    else
+    else if (S_ISREG(pfd->stat.st_mode))
     {
-        /* TODO: check also if file type is fatfs */
-
         FIL *filp;
         FRESULT result;
         UINT written;
 
         filp = pfd->opaque;
 
-        /* TODO: manage append */
+        if (pfd->status_flags & O_APPEND)
+        {
+            DWORD size;
 
-        result = f_write(filp, ptr, len, &written);
+            size = f_size(filp);
+            result = f_lseek(filp, size);
+        }
+        else
+        {
+            result = FR_OK;
+        }
+
+        if (result == FR_OK)
+        {
+            result = f_write(filp, ptr, len, &written);
+        }
         if (result == FR_OK)
         {
             ret = written;
@@ -331,6 +342,16 @@ int fatfs_write (int fd, char *ptr, int len)
             errno = fresult2errno(result);
             ret = -1;
         }
+    }
+    else if (S_ISDIR(pfd->stat.st_mode))
+    {
+        errno = EISDIR;
+        ret = -1;
+    }
+    else
+    {
+        errno = EBADF;
+        ret = -1;
     }
 
     return ret;
@@ -354,10 +375,8 @@ int fatfs_read (int fd, char *ptr, int len)
         errno = EBADF;
         ret = -1;
     }
-    else
+    else if (S_ISREG(pfd->stat.st_mode))
     {
-        /* TODO: check also if file type is fatfs */
-
         FIL *filp;
         FRESULT result;
         UINT nbytes_read;
@@ -374,6 +393,16 @@ int fatfs_read (int fd, char *ptr, int len)
             errno = fresult2errno(result);
             ret = -1;
         }
+    }
+    else if (S_ISDIR(pfd->stat.st_mode))
+    {
+        errno = EISDIR;
+        ret = -1;
+    }
+    else
+    {
+        errno = EBADF;
+        ret = -1;
     }
 
     return ret;
