@@ -27,5 +27,8 @@ int fatfs_open(const char *pathname, int flags);
 extern
 off_t fatfs_lseek(int fd, off_t offset, int whence );
 
+extern
+int fatfs_unlink(const char *path);
+
 #endif /* FATFS_H */
 
