@@ -54,7 +54,7 @@ static
 void fatfs_fil_free(FIL *fp);
 
 static
-void fill_fd(int fildes, FIL *fp, int flags);
+void fill_fd_file(int fildes, FIL *fp, const FILINFO *fno);
 
 /* static variables */
 
@@ -329,20 +329,115 @@ int fatfs_close (int fd)
 }
 
 static
-void fill_fd(int fildes, FIL *fp, int flags)
+void fill_fd(struct fd *pfd, const FILINFO *fno)
+{
+    mode_t mode;
+
+    pfd->isatty = 0;
+    pfd->isopen = 1;
+    pfd->close = fatfs_close;
+    memset(&pfd->stat, 0, sizeof(struct stat));
+    pfd->stat.st_size = fno->fsize;
+    if ((fno->fattrib & AM_MASK) & AM_DIR)
+    {
+        mode = S_IFDIR;
+    }
+    else
+    {
+        mode = S_IFREG;
+        pfd->write = fatfs_write;
+        pfd->read = fatfs_read;
+    }
+    /* rwxrwxrwx or r-xr-xr-x */
+    mode |= (S_IRUSR|S_IRGRP|S_IROTH);
+    mode |= (S_IXUSR|S_IXGRP|S_IXOTH);
+    if (!((fno->fattrib & AM_MASK) & AM_RDO))
+    {
+        mode |= (S_IWUSR|S_IWGRP|S_IWOTH);
+    }
+    pfd->stat.st_mode = mode;
+#if 0
+    /* not present in newlib struct stat */
+    struct timespec ts;
+    fattime_to_timespec(fno->fdate, fno->ftime, &ts);
+    pfd->stat.st_atim = ts;
+    pfd->stat.st_mtim = ts;
+    pfd->stat.st_ctim = ts;
+#endif
+}
+
+static
+void fill_fd_file(int fildes, FIL *fp, const FILINFO *fno)
 {
     struct fd *pfd;
-    struct stat s;
 
     pfd = file_struct_get(fildes);
 
-    /* TODO: fill stat */
-    pfd->isatty = 0;
-    pfd->isopen = 1;
-    pfd->write = fatfs_write;
-    pfd->read = fatfs_read;
-    pfd->close = fatfs_close;
+    fill_fd(pfd, fno);
     pfd->opaque = fp;
+}
+
+static
+FRESULT fatfs_open_file(const char *pathname, int flags, int fildes, const FILINFO *fno)
+{
+    FRESULT result;
+    BYTE mode;
+    FIL *fp;
+
+    fp = fatfs_fil_alloc();
+
+    if (fp == NULL)
+    {
+        result = FR_TOO_MANY_OPEN_FILES;
+    }
+    else
+    {
+        mode = flags2mode(flags);
+        result = f_open(fp, pathname, mode);
+        if (result == FR_OK)
+        {
+            fill_fd_file(fildes, fp, fno);
+        }
+        else
+        {
+            fatfs_fil_free(fp);
+        }
+    }
+
+    return result;
+}
+
+static
+FRESULT fatfs_open_dir(const char *pathname, int flags, int fildes, const FILINFO *fno)
+{
+    FRESULT result;
+
+    result = FR_INT_ERR;
+
+    return result;
+}
+
+static
+FRESULT fatfs_open_file_or_dir(const char *pathname, int flags, int fildes)
+{
+    FRESULT result;
+    FILINFO fno;
+
+    result = f_stat(pathname, &fno);
+    if (result != FR_OK)
+    {
+        /* just return */
+    }
+    else if ((fno.fattrib & AM_MASK) & AM_DIR)
+    {
+        result = fatfs_open_dir(pathname, flags, fildes, &fno);
+    }
+    else
+    {
+        result = fatfs_open_file(pathname, flags, fildes, &fno);
+    }
+
+    return result;
 }
 
 /* exported functions */
@@ -362,51 +457,27 @@ DWORD get_fattime (void)
 int fatfs_open(const char *pathname, int flags)
 {
     int ret;
-    FRESULT result;
-    BYTE mode;
-    FIL *fp;
     int fildes;
+    FRESULT result;
 
-    mode = flags2mode(flags);
-
-    fp = fatfs_fil_alloc();
     fildes = file_alloc();
-    if (fp == NULL)
-    {
-        errno = EMFILE;
-        ret = -1;
-    }
-    else if (fildes < 0)
+    if (fildes < 0)
     {
         errno = ENFILE;
         ret = -1;
     }
     else
     {
-        result = f_open(fp, pathname, mode);
+        result = fatfs_open_file_or_dir(pathname, flags, fildes);
         if (result == FR_OK)
         {
-            fill_fd(fildes, fp, flags);
             ret = fildes;
         }
         else
         {
             errno = fresult2errno(result);
-            fatfs_fil_free(fp);
             file_free(fildes);
             ret = -1;
-        }
-    }
-
-    if (ret == -1)
-    {
-        if (fp != NULL)
-        {
-            fatfs_fil_free(fp);
-        }
-        if (fildes >= 0)
-        {
-            file_free(fildes);
         }
     }
 
