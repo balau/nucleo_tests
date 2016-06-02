@@ -118,6 +118,16 @@ int main(void)
         perror(filepath);
         return 1;
     }
+    printf(
+            "Done.\n"
+            "Removing file...\n");
+
+    result = remove(filepath);
+    if (result != 0)
+    {
+        perror(filepath);
+        return 1;
+    }
     printf("Done.\n");
 
     return 0;
