@@ -222,18 +222,33 @@ int fatfs_close (int fd)
         errno = EBADF;
         ret = -1;
     }
+    else if (pfd->opaque == NULL)
+    {
+        errno = EBADF;
+        ret = -1;
+    }
     else
     {
         /* TODO: check also if file type is fatfs */
 
         FIL *filp;
+        FRESULT result;
 
         filp = pfd->opaque;
 
-        fatfs_fil_free(filp);
-        file_free(fd);
+        result = f_close(filp);
+        if (result == FR_OK)
+        {
+            fatfs_fil_free(filp);
+            file_free(fd);
 
-        ret = 0;
+            ret = 0;
+        }
+        else
+        {
+            errno = fresult2errno(result);
+            ret = -1;
+        }
     }
 
     return ret;
