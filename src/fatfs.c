@@ -54,6 +54,18 @@ static
 void fatfs_fil_free(FIL *fp);
 
 static
+DIR *fatfs_dir_alloc(void);
+
+static
+void fatfs_dir_free(DIR *fp);
+
+static
+int fatfs_fildir_alloc(void);
+
+static
+int fatfs_fildir_free(void *p);
+
+static
 void fill_fd_file(int fildes, FIL *fp, const FILINFO *fno);
 
 /* static variables */
@@ -62,7 +74,11 @@ static FATFS fs;
 
 static struct {
     int allocated;
-    FIL fil;
+    union
+    {
+        FIL fil;
+        DIR dir;
+    };
     } files[OPEN_MAX];
 
 /* static functions */
@@ -158,41 +174,115 @@ BYTE flags2mode(int flags)
 }
 
 static
-FIL *fatfs_fil_alloc(void)
+int fatfs_fildir_alloc(void)
 {
     int i_fil;
-    FIL *f;
 
-    f = NULL;
     for (i_fil = 0; i_fil < OPEN_MAX; i_fil++)
     {
         if (!files[i_fil].allocated)
         {
             files[i_fil].allocated = 1;
-            f = &files[i_fil].fil;
             break;
         }
+    }
+    if (i_fil == OPEN_MAX)
+    {
+        i_fil = -1;
+    }
+    return i_fil;
+}
+
+static
+FIL *fatfs_fil_alloc(void)
+{
+    int i_fil;
+    FIL *f;
+
+    i_fil = fatfs_fildir_alloc();
+    if (i_fil == -1)
+    {
+        f = NULL;
+    }
+    else
+    {
+        f = &files[i_fil].fil;
     }
 
     return f;
 }
 
 static
-void fatfs_fil_free(FIL *fp)
+DIR *fatfs_dir_alloc(void)
 {
-    /* TODO */
+    int i_fil;
+    DIR *d;
+
+    i_fil = fatfs_fildir_alloc();
+    if (i_fil == -1)
+    {
+        d = NULL;
+    }
+    else
+    {
+        d = &files[i_fil].dir;
+    }
+
+    return d;
+}
+
+static
+int fatfs_fildir_free(void *fp)
+{
     int i_fil;
 
     for (i_fil = 0; i_fil < OPEN_MAX; i_fil++)
     {
-        if (files[i_fil].allocated && (fp == &files[i_fil].fil))
+        if (
+                files[i_fil].allocated
+                &&
+                (
+                 (fp == &files[i_fil].fil)
+                 ||
+                 (fp == &files[i_fil].dir)
+                )
+           )
+
         {
             files[i_fil].allocated = 0;
-            memset(&files[i_fil].fil, 0, sizeof(files[i_fil].fil));
             break;
         }
     }
+    if (i_fil == OPEN_MAX)
+    {
+        i_fil = -1;
+    }
 
+    return i_fil;
+}
+
+static
+void fatfs_dir_free(DIR *fp)
+{
+    int i_fil;
+
+    i_fil = fatfs_fildir_free(fp);
+    if (i_fil != -1)
+    {
+        memset(&files[i_fil].dir, 0, sizeof(files[i_fil].dir));
+    }
+}
+
+static
+void fatfs_fil_free(FIL *fp)
+{
+    int i_fil;
+
+    i_fil = fatfs_fildir_free(fp);
+    if (i_fil != -1)
+    {
+        memset(&files[i_fil].fil, 0, sizeof(files[i_fil].fil));
+    }
 }
 
 static
