@@ -77,24 +77,38 @@ int fresult2errno(FRESULT result)
         case FR_OK:
             err = 0;
             break;
+        case FR_EXIST:
+            err = EEXIST;
+            break;
+        case FR_NO_FILE:
+            err = ENOENT;
+            break;
+        case FR_NO_PATH:
+        case FR_INVALID_NAME:
+            err = ENOTDIR;
+            break;
+        case FR_WRITE_PROTECTED:
+            err = EROFS;
+            break;
+        case FR_DENIED:
+            err = EACCES;
+            break;
+        case FR_TOO_MANY_OPEN_FILES:
+            err = ENFILE;
+            break;
+        case FR_NOT_ENOUGH_CORE:
+            err = ENOMEM;
+            break;
         case FR_DISK_ERR:
         case FR_INT_ERR:
         case FR_NOT_READY:
-        case FR_NO_FILE:
-        case FR_NO_PATH:
-        case FR_INVALID_NAME:
-        case FR_DENIED:
-        case FR_EXIST:
         case FR_INVALID_OBJECT:
-        case FR_WRITE_PROTECTED:
         case FR_INVALID_DRIVE:
         case FR_NOT_ENABLED:
         case FR_NO_FILESYSTEM:
         case FR_MKFS_ABORTED:
         case FR_TIMEOUT:
         case FR_LOCKED:
-        case FR_NOT_ENOUGH_CORE:
-        case FR_TOO_MANY_OPEN_FILES:
         case FR_INVALID_PARAMETER:
         /* TODO */
         default:
@@ -119,23 +133,24 @@ BYTE flags2mode(int flags)
     if ((flags & O_WRONLY) || (flags & O_RDWR))
     {
         mode |= FA_WRITE;
-    }
-    if (flags & O_CREAT)
-    {
-        if (flags & O_EXCL)
+
+        if (!(flags & O_CREAT))
+        {
+            mode |= FA_OPEN_EXISTING;
+        }
+        else if (flags & O_EXCL)
         {
             mode |= FA_CREATE_NEW;
+        }
+        else if (flags & O_TRUNC)
+        {
+            mode |= FA_CREATE_ALWAYS;
         }
         else
         {
             mode |= FA_OPEN_ALWAYS;
         }
     }
-    if (flags & O_TRUNC)
-    {
-        mode |= FA_CREATE_NEW;
-    }
-    /* TODO: check special combinations */
 
     return mode;
 }
@@ -267,20 +282,34 @@ int fatfs_open(const char *pathname, int flags)
 
     fp = fatfs_fil_alloc();
     fildes = file_alloc();
-    if ((fp != NULL) && (fildes >= 0))
+    if (fp == NULL)
+    {
+        errno = EMFILE;
+        ret = -1;
+    }
+    else if (fildes < 0)
+    {
+        errno = ENFILE;
+        ret = -1;
+    }
+    else
     {
         result = f_open(fp, pathname, mode);
         if (result == FR_OK)
         {
             fill_fd(fildes, fp);
+            ret = fildes;
         }
         else
         {
-            ret = -1;
             errno = fresult2errno(result);
+            fatfs_fil_free(fp);
+            file_free(fildes);
+            ret = -1;
         }
     }
-    else
+
+    if (ret == -1)
     {
         if (fp != NULL)
         {
@@ -290,12 +319,8 @@ int fatfs_open(const char *pathname, int flags)
         {
             file_free(fildes);
         }
-        ret = -1;
-        errno = ENFILE;
     }
 
-    errno = EINVAL;
-    ret = -1;
     return ret;
 }
 
