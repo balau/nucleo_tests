@@ -391,10 +391,8 @@ int fatfs_close (int fd)
         errno = EBADF;
         ret = -1;
     }
-    else
+    else if (S_ISREG(pfd->stat.st_mode))
     {
-        /* TODO: check also if file type is fatfs */
-
         FIL *filp;
         FRESULT result;
 
@@ -405,7 +403,6 @@ int fatfs_close (int fd)
         {
             fatfs_fil_free(filp);
             file_free(fd);
-
             ret = 0;
         }
         else
@@ -413,6 +410,31 @@ int fatfs_close (int fd)
             errno = fresult2errno(result);
             ret = -1;
         }
+    }
+    else if (S_ISDIR(pfd->stat.st_mode))
+    {
+        DIR *dp;
+        FRESULT result;
+
+        dp = pfd->opaque;
+
+        result = f_closedir(dp);
+        if (result == FR_OK)
+        {
+            fatfs_dir_free(dp);
+            file_free(fd);
+            ret = 0;
+        }
+        else
+        {
+            errno = fresult2errno(result);
+            ret = -1;
+        }
+    }
+    else
+    {
+        errno = EBADF;
+        ret = -1;
     }
 
     return ret;
