@@ -43,6 +43,10 @@ int main(void)
             "Press Enter to continue...\n");
     wait_enter();
 
+    printf("Write a message:\n");
+    scanf("%s", message);
+    printf("Writing message to %s...\n", filepath);
+
     fout = fopen(filepath, "w");
     if (fout == NULL)
     {
@@ -51,8 +55,6 @@ int main(void)
     }
     else
     {
-        printf("Write a message:\n");
-        scanf("%s", message);
         result = fputs(message, fout);
         if (result < 0)
         {
@@ -66,6 +68,8 @@ int main(void)
         perror(filepath);
         return 1;
     }
+    printf("Done.\n"
+           "Reading message from %s...\n", filepath);
 
     fin = fopen(filepath, "r");
     if (fout == NULL)
@@ -91,6 +95,7 @@ int main(void)
         perror(filepath);
         return 1;
     }
+    printf("Done.\n");
 
     return 0;
 }
