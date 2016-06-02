@@ -227,14 +227,17 @@ _off_t _lseek(int fd, _off_t offset, int whence )
         errno = EBADF;
         ret = -1;
     }
+    else if (S_ISSOCK(f->stat.st_mode))
+    {
+        errno = EPIPE;
+        ret = -1;
+    }
     else if (S_ISREG(f->stat.st_mode))
     {
         ret = fatfs_lseek(fd, offset, whence);
     }
     else
     {
-        (void)offset;
-        (void)whence;
         errno = EINVAL;
         ret = -1;
     }
