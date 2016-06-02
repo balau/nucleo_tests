@@ -123,14 +123,16 @@ static
 BYTE flags2mode(int flags)
 {
     BYTE mode;
+    int accmode;
 
     mode = 0;
+    accmode = flags & O_ACCMODE;
 
-    if ((flags & O_RDONLY) || (flags & O_RDWR))
+    if ((accmode == O_RDONLY) || (accmode == O_RDWR))
     {
         mode |= FA_READ;
     }
-    if ((flags & O_WRONLY) || (flags & O_RDWR))
+    if ((accmode == O_WRONLY) || (accmode == O_RDWR))
     {
         mode |= FA_WRITE;
 
