@@ -270,6 +270,16 @@ int rmdir(const char *path)
     return fatfs_rmdir(path);
 }
 
+int chdir(const char *path)
+{
+    return fatfs_chdir(path);
+}
+
+char *getcwd(char *buf, size_t size)
+{
+    return fatfs_getcwd(buf, size);
+}
+
 void _exit(int code)
 {
     (void)code;
