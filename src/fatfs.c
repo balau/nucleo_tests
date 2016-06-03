@@ -552,8 +552,15 @@ FRESULT fatfs_open_file(const char *pathname, int flags, int fildes, const FILIN
     }
     else
     {
+        FILINFO fno_after;
+
         mode = flags2mode(flags);
         result = f_open(fp, pathname, mode);
+        if ((result == FR_OK) && (fno->fname[0] == '\0'))
+        {
+            result = f_stat(pathname, &fno_after);
+            fno = &fno_after;
+        }
         if (result == FR_OK)
         {
             fill_fd_fil(fildes, fp, flags, fno);
@@ -601,12 +608,13 @@ FRESULT fatfs_open_file_or_dir(const char *pathname, int flags, int fildes)
     FRESULT result;
     FILINFO fno;
 
+    fno.fname[0] = '\0'; /* initialize as invalid */
     result = f_stat(pathname, &fno);
-    if (result != FR_OK)
+    if ((result != FR_OK) && (result != FR_NO_FILE))
     {
         /* just return */
     }
-    else if ((fno.fattrib & AM_MASK) & AM_DIR)
+    else if ((result == FR_OK) && ((fno.fattrib & AM_MASK) & AM_DIR))
     {
         result = fatfs_open_dir(pathname, flags, fildes, &fno);
     }
