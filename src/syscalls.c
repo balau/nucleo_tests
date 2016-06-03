@@ -260,6 +260,11 @@ int fsync(int fd)
     return fatfs_fsync(fd);
 }
 
+int mkdir(const char *path, mode_t mode)
+{
+    return fatfs_mkdir(path, mode);
+}
+
 void _exit(int code)
 {
     (void)code;
