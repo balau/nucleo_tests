@@ -40,6 +40,7 @@ int main(void)
     const char *dir2path = "dirtest/subdir";
     int result;
     struct stat s;
+    char cwd[256];
 
     printf(
             "fatfs_dirent\n"
@@ -97,6 +98,29 @@ int main(void)
             return 1;
         }
     }
+
+    /* chdir */
+    printf("cwd = %s\n", getcwd(cwd, sizeof(cwd)));
+    result = chdir(dirpath);
+    if (result != 0)
+    {
+        perror(dirpath);
+        return 1;
+    }
+    printf(
+            "cd %s\n"
+            "cwd = %s\n",
+            dirpath,
+            getcwd(cwd, sizeof(cwd)));
+    result = chdir("..");
+    if (result != 0)
+    {
+        perror(dirpath);
+        return 1;
+    }
+    printf(
+            "cd ..\n"
+            "cwd = %s\n", getcwd(cwd, sizeof(cwd)));
 
     /* list */
 
