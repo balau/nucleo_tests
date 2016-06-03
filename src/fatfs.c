@@ -894,6 +894,44 @@ int fatfs_rmdir(const char *path)
     return ret;
 }
 
+int fatfs_chdir(const char *path)
+{
+    int ret;
+    FRESULT result;
+
+    result = f_chdir(path);
+    if (result == FR_OK)
+    {
+        ret = 0;
+    }
+    else
+    {
+        errno = fresult2errno(result);
+        ret = -1;
+    }
+
+    return ret;
+}
+
+char *fatfs_getcwd(char *buf, size_t size)
+{
+    char *ret;
+    FRESULT result;
+
+    result = f_getcwd(buf, size);
+    if (result == FR_OK)
+    {
+        ret = buf;
+    }
+    else
+    {
+        errno = fresult2errno(result);
+        ret = NULL;
+    }
+
+    return ret;
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {

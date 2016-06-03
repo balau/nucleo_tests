@@ -43,5 +43,11 @@ int fatfs_mkdir(const char *path, mode_t mode);
 extern
 int fatfs_rmdir(const char *path);
 
+extern
+int fatfs_chdir(const char *path);
+
+extern
+char *fatfs_getcwd(char *buf, size_t size);
+
 #endif /* FATFS_H */
 
