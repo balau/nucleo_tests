@@ -34,20 +34,18 @@ void wait_enter(void)
     } while ((c != '\n') && (c != '\r'));
 }
 
-int main(void)
+static
+const char dirpath[] = "dirtest";
+
+static
+const char dir2path[] = "dirtest/subdir";
+
+static
+int test_create(void)
 {
-    const char *dirpath = "dirtest";
-    const char *dir2path = "dirtest/subdir";
     int result;
     struct stat s;
-    char cwd[256];
 
-    printf(
-            "fatfs_dirent\n"
-            "Press Enter to continue...\n");
-    wait_enter();
-
-    /* create */
     result = mkdir(dirpath, S_IRWXU | S_IRWXG | S_IRWXO);
     if (result != 0)
     {
@@ -99,7 +97,15 @@ int main(void)
         }
     }
 
-    /* chdir */
+    return 0;
+}
+
+static
+int test_chdir(void)
+{
+    int result;
+    char cwd[256];
+
     printf("cwd = %s\n", getcwd(cwd, sizeof(cwd)));
     result = chdir(dirpath);
     if (result != 0)
@@ -122,9 +128,23 @@ int main(void)
             "cd ..\n"
             "cwd = %s\n", getcwd(cwd, sizeof(cwd)));
 
-    /* list */
+    return 0;
+}
 
-    /* remove */
+static
+int test_list(void)
+{
+    int result;
+
+    return 0;
+}
+
+static
+int test_remove(void)
+{
+    int result;
+    struct stat s;
+
     result = rmdir(dirpath);
     if (result == 0)
     {
@@ -159,6 +179,39 @@ int main(void)
     {
         perror(dirpath);
         return 1;
+    }
+
+    return 0;
+}
+
+int main(void)
+{
+    int result;
+
+    printf(
+            "fatfs_dirent\n"
+            "Press Enter to continue...\n");
+    wait_enter();
+
+    result = test_create();
+    if (result != 0)
+    {
+        return result;
+    }
+    result = test_chdir();
+    if (result != 0)
+    {
+        return result;
+    }
+    result = test_list();
+    if (result != 0)
+    {
+        return result;
+    }
+    result = test_remove();
+    if (result != 0)
+    {
+        return result;
     }
 
     printf("Done.\n");
