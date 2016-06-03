@@ -21,9 +21,13 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include "fatfs.h"
 #include "file.h"
+
+#define DIR FFDIR
 #include "ff.h"
+#undef DIR
 
 /* Macro definitions */
 
@@ -54,10 +58,10 @@ static
 void fatfs_fil_free(FIL *fp);
 
 static
-DIR *fatfs_dir_alloc(void);
+FFDIR *fatfs_dir_alloc(void);
 
 static
-void fatfs_dir_free(DIR *fp);
+void fatfs_dir_free(FFDIR *fp);
 
 static
 int fatfs_fildir_alloc(void);
@@ -69,7 +73,7 @@ static
 void fill_fd_fil(int fildes, FIL *fp, int flags, const FILINFO *fno);
 
 static
-void fill_fd_dir(int fildes, DIR *fp, int flags, const FILINFO *fno);
+void fill_fd_dir(int fildes, FFDIR *fp, int flags, const FILINFO *fno);
 
 static
 void fill_fd(struct fd *pfd, int flags, const FILINFO *fno);
@@ -83,7 +87,7 @@ static struct {
     union
     {
         FIL fil;
-        DIR dir;
+        FFDIR dir;
     };
     } files[OPEN_MAX];
 
@@ -219,10 +223,10 @@ FIL *fatfs_fil_alloc(void)
 }
 
 static
-DIR *fatfs_dir_alloc(void)
+FFDIR *fatfs_dir_alloc(void)
 {
     int i_fil;
-    DIR *d;
+    FFDIR *d;
 
     i_fil = fatfs_fildir_alloc();
     if (i_fil == -1)
@@ -268,7 +272,7 @@ int fatfs_fildir_free(void *fp)
 }
 
 static
-void fatfs_dir_free(DIR *fp)
+void fatfs_dir_free(FFDIR *fp)
 {
     int i_fil;
 
@@ -448,7 +452,7 @@ int fatfs_close (int fd)
     }
     else if (S_ISDIR(pfd->stat.st_mode))
     {
-        DIR *dp;
+        FFDIR *dp;
         FRESULT result;
 
         dp = pfd->opaque;
@@ -542,7 +546,7 @@ void fill_fd_fil(int fildes, FIL *fp, int flags, const FILINFO *fno)
 }
 
 static
-void fill_fd_dir(int fildes, DIR *fp, int flags, const FILINFO *fno)
+void fill_fd_dir(int fildes, FFDIR *fp, int flags, const FILINFO *fno)
 {
     struct fd *pfd;
 
@@ -593,7 +597,7 @@ static
 FRESULT fatfs_open_dir(const char *pathname, int flags, int fildes, const FILINFO *fno)
 {
     FRESULT result;
-    DIR *fp;
+    FFDIR *fp;
 
     fp = fatfs_dir_alloc();
 
@@ -930,6 +934,18 @@ char *fatfs_getcwd(char *buf, size_t size)
     }
 
     return ret;
+}
+
+DIR *fatfs_opendir(const char *path)
+{
+    errno = ENOSYS;
+    return NULL;
+}
+
+int fatfs_closedir(DIR *dirp)
+{
+    errno = ENOSYS;
+    return -1;
 }
 
 __attribute__((constructor))

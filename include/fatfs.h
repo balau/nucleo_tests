@@ -21,6 +21,7 @@
 
 #include <unistd.h>
 #include <sys/stat.h>
+#include <dirent.h>
 
 extern
 int fatfs_open(const char *pathname, int flags);
@@ -48,6 +49,12 @@ int fatfs_chdir(const char *path);
 
 extern
 char *fatfs_getcwd(char *buf, size_t size);
+
+extern
+DIR *fatfs_opendir(const char *path);
+
+extern
+int fatfs_closedir(DIR *dirp);
 
 #endif /* FATFS_H */
 
