@@ -265,6 +265,11 @@ int mkdir(const char *path, mode_t mode)
     return fatfs_mkdir(path, mode);
 }
 
+int rmdir(const char *path)
+{
+    return fatfs_rmdir(path);
+}
+
 void _exit(int code)
 {
     (void)code;
