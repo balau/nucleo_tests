@@ -862,6 +862,29 @@ int fatfs_rmdir(const char *path)
     {
         ret = 0;
     }
+    else if (result == FR_DENIED)
+    {
+        FILINFO fno;
+
+        /* the dir was readonly or not empty: check */
+        result = f_stat(path, &fno);
+        if (result == FR_OK)
+        {
+            if ((fno.fattrib & AM_MASK) & AM_RDO)
+            {
+                errno = EACCES;
+            }
+            else
+            {
+                errno = ENOTEMPTY;
+            }
+        }
+        else
+        {
+            errno = fresult2errno(result);
+        }
+        ret = -1;
+    }
     else
     {
         errno = fresult2errno(result);
