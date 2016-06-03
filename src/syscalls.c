@@ -280,6 +280,16 @@ char *getcwd(char *buf, size_t size)
     return fatfs_getcwd(buf, size);
 }
 
+DIR *opendir(const char *path)
+{
+    return fatfs_opendir(path);
+}
+
+int closedir(DIR *dirp)
+{
+    return fatfs_closedir(dirp);
+}
+
 void _exit(int code)
 {
     (void)code;
