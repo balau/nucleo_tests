@@ -20,6 +20,7 @@
 #define FATFS_H
 
 #include <unistd.h>
+#include <sys/stat.h>
 
 extern
 int fatfs_open(const char *pathname, int flags);
@@ -32,6 +33,9 @@ int fatfs_unlink(const char *path);
 
 extern
 int fatfs_fsync(int fd);
+
+extern
+int fatfs_stat(const char *path, struct stat *buf);
 
 #endif /* FATFS_H */
 

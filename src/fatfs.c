@@ -476,17 +476,13 @@ int fatfs_close (int fd)
 }
 
 static
-void fill_fd(struct fd *pfd, int flags, const FILINFO *fno)
+void fill_stat(const FILINFO *fno, struct stat *out)
 {
     mode_t mode;
 
-    pfd->isatty = 0;
-    pfd->isopen = 1;
-    pfd->close = fatfs_close;
-    pfd->status_flags = flags;
-    pfd->descriptor_flags = 0;
-    memset(&pfd->stat, 0, sizeof(struct stat));
-    pfd->stat.st_size = fno->fsize;
+    memset(out, 0, sizeof(struct stat));
+
+    out->st_size = fno->fsize;
     if ((fno->fattrib & AM_MASK) & AM_DIR)
     {
         mode = S_IFDIR;
@@ -494,17 +490,19 @@ void fill_fd(struct fd *pfd, int flags, const FILINFO *fno)
     else
     {
         mode = S_IFREG;
-        pfd->write = fatfs_write;
-        pfd->read = fatfs_read;
     }
-    /* rwxrwxrwx or r-xr-xr-x */
     mode |= (S_IRUSR|S_IRGRP|S_IROTH);
     mode |= (S_IXUSR|S_IXGRP|S_IXOTH);
     if (!((fno->fattrib & AM_MASK) & AM_RDO))
     {
+        /* rwxrwxrwx */
         mode |= (S_IWUSR|S_IWGRP|S_IWOTH);
     }
-    pfd->stat.st_mode = mode;
+    else
+    {
+        /* r-xr-xr-x */
+    }
+    out->st_mode = mode;
 #if 0
     /* not present in newlib struct stat */
     struct timespec ts;
@@ -513,6 +511,23 @@ void fill_fd(struct fd *pfd, int flags, const FILINFO *fno)
     pfd->stat.st_mtim = ts;
     pfd->stat.st_ctim = ts;
 #endif
+}
+
+static
+void fill_fd(struct fd *pfd, int flags, const FILINFO *fno)
+{
+    pfd->isatty = 0;
+    pfd->isopen = 1;
+    pfd->close = fatfs_close;
+    pfd->status_flags = flags;
+    pfd->descriptor_flags = 0;
+    if (!((fno->fattrib & AM_MASK) & AM_DIR))
+    {
+        pfd->write = fatfs_write;
+        pfd->read = fatfs_read;
+    }
+
+    fill_stat(fno, &pfd->stat);
 }
 
 static
@@ -790,6 +805,27 @@ int fatfs_fsync(int fd)
     else
     {
         errno = EINVAL;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int fatfs_stat(const char *path, struct stat *buf)
+{
+    int ret;
+    FRESULT result;
+    FILINFO fno;
+
+    result = f_stat(path, &fno);
+    if (result == FR_OK)
+    {
+        fill_stat(&fno, buf);
+        ret = 0;
+    }
+    else
+    {
+        errno = fresult2errno(result);
         ret = -1;
     }
 
