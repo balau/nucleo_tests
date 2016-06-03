@@ -852,6 +852,25 @@ int fatfs_mkdir(const char *path, mode_t mode)
     return ret;
 }
 
+int fatfs_rmdir(const char *path)
+{
+    int ret;
+    FRESULT result;
+
+    result = f_unlink(path);
+    if (result == FR_OK)
+    {
+        ret = 0;
+    }
+    else
+    {
+        errno = fresult2errno(result);
+        ret = -1;
+    }
+
+    return ret;
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {

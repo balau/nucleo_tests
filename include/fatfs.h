@@ -40,5 +40,8 @@ int fatfs_stat(const char *path, struct stat *buf);
 extern
 int fatfs_mkdir(const char *path, mode_t mode);
 
+extern
+int fatfs_rmdir(const char *path);
+
 #endif /* FATFS_H */
 
