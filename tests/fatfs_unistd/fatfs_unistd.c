@@ -19,10 +19,10 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 static
 void wait_enter(void)
@@ -41,6 +41,7 @@ int main(void)
     int fdin;
     char message[80];
     int result;
+    struct stat s;
 
     printf(
             "fatfs_unistd\n"
@@ -72,7 +73,7 @@ int main(void)
         perror(filepath);
         return 1;
     }
-    printf("\npos = %ld.\n", lseek(fdout, 0, SEEK_CUR));
+    printf("pos = %ld.\n", lseek(fdout, 0, SEEK_CUR));
     result = close(fdout);
     if (result != 0)
     {
@@ -132,8 +133,20 @@ int main(void)
             "Done.\n"
             "Removing file...\n");
 
+    result = stat(filepath, &s);
+    if (result != 0)
+    {
+        perror(filepath);
+        return 1;
+    }
     result = unlink(filepath);
     if (result != 0)
+    {
+        perror(filepath);
+        return 1;
+    }
+    result = stat(filepath, &s);
+    if (result != -1 || errno != ENOENT)
     {
         perror(filepath);
         return 1;
