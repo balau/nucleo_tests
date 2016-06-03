@@ -21,6 +21,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <unistd.h>
+#include <dirent.h>
 
 static
 void wait_enter(void)
@@ -36,6 +38,7 @@ int main(void)
 {
     const char *dirpath = "dirtest";
     int result;
+    struct stat s;
 
     printf(
             "fatfs_dirent\n"
@@ -55,6 +58,38 @@ int main(void)
             return 1;
         }
     }
+
+    result = stat(dirpath, &s);
+    if (result != 0)
+    {
+        perror(dirpath);
+        return 1;
+    }
+    if (!S_ISDIR(s.st_mode))
+    {
+        fprintf(stderr, "%s: not a directory.\n", dirpath);
+        return 1;
+    }
+
+    result = rmdir(dirpath);
+    if (result != 0)
+    {
+        perror(dirpath);
+        return 1;
+    }
+
+    result = stat(dirpath, &s);
+    if (result == 0)
+    {
+        fprintf(stderr, "%s: still exists.\n", dirpath);
+        return 1;
+    }
+    else if (errno != ENOENT)
+    {
+        perror(dirpath);
+        return 1;
+    }
+
     printf("Done.\n");
 
     return 0;
