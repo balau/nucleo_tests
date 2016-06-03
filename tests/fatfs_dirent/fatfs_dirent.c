@@ -135,6 +135,20 @@ static
 int test_list(void)
 {
     int result;
+    DIR *dp;
+
+    dp = opendir(dirpath);
+    if (dp == NULL)
+    {
+        perror(dirpath);
+        return 1;
+    }
+    result = closedir(dp);
+    if (result != 0)
+    {
+        perror(dirpath);
+        return 1;
+    }
 
     return 0;
 }
