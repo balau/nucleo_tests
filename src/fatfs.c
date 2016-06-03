@@ -832,6 +832,26 @@ int fatfs_stat(const char *path, struct stat *buf)
     return ret;
 }
 
+int fatfs_mkdir(const char *path, mode_t mode)
+{
+    int ret;
+    FRESULT result;
+
+    (void)mode; /* ignored */
+    result = f_mkdir(path);
+    if (result == FR_OK)
+    {
+        ret = 0;
+    }
+    else
+    {
+        errno = fresult2errno(result);
+        ret = -1;
+    }
+
+    return ret;
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {

@@ -37,5 +37,8 @@ int fatfs_fsync(int fd);
 extern
 int fatfs_stat(const char *path, struct stat *buf);
 
+extern
+int fatfs_mkdir(const char *path, mode_t mode);
+
 #endif /* FATFS_H */
 
