@@ -37,6 +37,7 @@ void wait_enter(void)
 int main(void)
 {
     const char *dirpath = "dirtest";
+    const char *dir2path = "dirtest/subdir";
     int result;
     struct stat s;
 
@@ -45,6 +46,7 @@ int main(void)
             "Press Enter to continue...\n");
     wait_enter();
 
+    /* create */
     result = mkdir(dirpath, S_IRWXU | S_IRWXG | S_IRWXO);
     if (result != 0)
     {
@@ -70,7 +72,52 @@ int main(void)
         fprintf(stderr, "%s: not a directory.\n", dirpath);
         return 1;
     }
+    result = stat(dirpath, &s);
+    if (result != 0)
+    {
+        perror(dirpath);
+        return 1;
+    }
+    if (!S_ISDIR(s.st_mode))
+    {
+        fprintf(stderr, "%s: not a directory.\n", dirpath);
+        return 1;
+    }
 
+    result = mkdir(dir2path, S_IRWXU | S_IRWXG | S_IRWXO);
+    if (result != 0)
+    {
+        if (errno == EEXIST)
+        {
+            printf("Directory already exists. Continuing...\n");
+        }
+        else
+        {
+            perror(dir2path);
+            return 1;
+        }
+    }
+
+    /* list */
+
+    /* remove */
+    result = rmdir(dirpath);
+    if (result == 0)
+    {
+        fprintf(stderr, "%s: removed not empty directory.\n", dirpath);
+        return 1;
+    }
+    else if ((errno != EEXIST) && (errno != ENOTEMPTY))
+    {
+        perror(dirpath);
+        return 1;
+    }
+    result = rmdir(dir2path);
+    if (result != 0)
+    {
+        perror(dir2path);
+        return 1;
+    }
     result = rmdir(dirpath);
     if (result != 0)
     {
