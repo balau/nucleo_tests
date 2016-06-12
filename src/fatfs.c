@@ -58,10 +58,10 @@ static
 void fatfs_fil_free(FIL *fp);
 
 static
-FFDIR *fatfs_dir_alloc(void);
+DIR *fatfs_dir_alloc(void);
 
 static
-void fatfs_dir_free(FFDIR *fp);
+void fatfs_dir_free(DIR *fp);
 
 static
 int fatfs_fildir_alloc(void);
@@ -73,7 +73,7 @@ static
 void fill_fd_fil(int fildes, FIL *fp, int flags, const FILINFO *fno);
 
 static
-void fill_fd_dir(int fildes, FFDIR *fp, int flags, const FILINFO *fno);
+void fill_fd_dir(int fildes, DIR *fp, int flags, const FILINFO *fno);
 
 static
 void fill_fd(struct fd *pfd, int flags, const FILINFO *fno);
@@ -82,12 +82,26 @@ void fill_fd(struct fd *pfd, int flags, const FILINFO *fno);
 
 static FATFS fs;
 
+struct dirent_storage {
+    ino_t d_ino;
+    char d_name[NAME_MAX+1];
+};
+
+struct dirstream {
+    int fd;
+    long loc;
+    struct dirent_storage cur_entry;
+    FFDIR ffdir;
+};
+
+/* typedef struct dirstream DIR in dirent.h */
+
 static struct {
     int allocated;
     union
     {
         FIL fil;
-        FFDIR dir;
+        DIR dir;
     };
     } files[OPEN_MAX];
 
@@ -223,10 +237,10 @@ FIL *fatfs_fil_alloc(void)
 }
 
 static
-FFDIR *fatfs_dir_alloc(void)
+DIR *fatfs_dir_alloc(void)
 {
     int i_fil;
-    FFDIR *d;
+    DIR *d;
 
     i_fil = fatfs_fildir_alloc();
     if (i_fil == -1)
@@ -272,7 +286,7 @@ int fatfs_fildir_free(void *fp)
 }
 
 static
-void fatfs_dir_free(FFDIR *fp)
+void fatfs_dir_free(DIR *fp)
 {
     int i_fil;
 
@@ -452,12 +466,12 @@ int fatfs_close (int fd)
     }
     else if (S_ISDIR(pfd->stat.st_mode))
     {
-        FFDIR *dp;
+        DIR *dp;
         FRESULT result;
 
         dp = pfd->opaque;
 
-        result = f_closedir(dp);
+        result = f_closedir(&dp->ffdir);
         if (result == FR_OK)
         {
             fatfs_dir_free(dp);
@@ -546,7 +560,7 @@ void fill_fd_fil(int fildes, FIL *fp, int flags, const FILINFO *fno)
 }
 
 static
-void fill_fd_dir(int fildes, FFDIR *fp, int flags, const FILINFO *fno)
+void fill_fd_dir(int fildes, DIR *fp, int flags, const FILINFO *fno)
 {
     struct fd *pfd;
 
@@ -597,24 +611,26 @@ static
 FRESULT fatfs_open_dir(const char *pathname, int flags, int fildes, const FILINFO *fno)
 {
     FRESULT result;
-    FFDIR *fp;
+    DIR *dp;
 
-    fp = fatfs_dir_alloc();
+    dp = fatfs_dir_alloc();
 
-    if (fp == NULL)
+    if (dp == NULL)
     {
         result = FR_TOO_MANY_OPEN_FILES;
     }
     else
     {
-        result = f_opendir(fp, pathname);
+        result = f_opendir(&dp->ffdir, pathname);
         if (result == FR_OK)
         {
-            fill_fd_dir(fildes, fp, flags, fno);
+            dp->fd = fildes;
+            dp->loc = 0;
+            fill_fd_dir(fildes, dp, flags, fno);
         }
         else
         {
-            fatfs_dir_free(fp);
+            fatfs_dir_free(dp);
         }
     }
 
@@ -938,50 +954,106 @@ char *fatfs_getcwd(char *buf, size_t size)
 
 DIR *fatfs_opendir(const char *path)
 {
-    errno = ENOSYS;
-    return NULL;
+    DIR *ret;
+    int result;
+
+    result = fatfs_open(path, O_RDONLY);
+    if (result == -1)
+    {
+        ret = NULL;
+    }
+    else
+    {
+        struct fd *pfd;
+
+        pfd = file_struct_get(result);
+        if (pfd == NULL)
+        {
+            errno = EBADF;
+            ret = NULL;
+        }
+        else
+        {
+            ret = pfd->opaque;
+        }
+    }
+
+    return ret;
 }
 
 int fatfs_closedir(DIR *dirp)
 {
-    errno = ENOSYS;
-    return -1;
+    return fatfs_close(dirp->fd);
 }
 
 struct dirent *fatfs_readdir(DIR *dirp)
 {
     struct dirent *ret;
+    int result;
 
-    errno = ENOSYS;
-    ret = NULL;
+    result = fatfs_readdir_r(dirp, (struct dirent *)&dirp->cur_entry, &ret);
+    (void)result; /* ignore */
 
     return ret;
 }
 
-int  fatfs_readdir_r(
+int fatfs_readdir_r(
         DIR *dirp,
         struct dirent *entry,
         struct dirent **result)
 {
     int ret;
+    FRESULT fresult;
+    FILINFO fno;
 
-    errno = ENOSYS;
-    ret = -1;
+    /* TODO: check dirp */
+    fresult = f_readdir(&dirp->ffdir, &fno);
+    if (fresult != FR_OK)
+    {
+        errno = fresult2errno(fresult);
+        ret = -1;
+        *result = NULL;
+    }
+    else if (fno.fname[0] == '\0')
+    {
+        /* end of entries */
+        ret = 0;
+        *result = NULL;
+    }
+    else
+    {
+        ret = 0;
+        dirp->loc++;
+        entry->d_ino = dirp->loc; /* TODO: meaningful number */
+        strncpy(entry->d_name, fno.fname, NAME_MAX+1);
+        *result = entry;
+    }
 
     return ret;
 }
 
 void fatfs_rewinddir(DIR *dirp)
 {
-    errno = ENOSYS;
+    int result;
+
+    /* TODO: check dirp */
+    result = f_readdir(&dirp->ffdir, NULL);
+    if (result == FR_OK)
+    {
+        dirp->loc = 0;
+    }
+    else
+    {
+        errno = fresult2errno(result);
+    }
 }
 
 long fatfs_telldir(DIR *dirp)
 {
     long ret;
 
-    errno = ENOSYS;
-    ret = -1;
+    /* TODO: check valid pointer */
+    ret = dirp->loc;
 
     return ret;
 }
