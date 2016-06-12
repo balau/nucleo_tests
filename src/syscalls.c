@@ -290,6 +290,29 @@ int closedir(DIR *dirp)
     return fatfs_closedir(dirp);
 }
 
+struct dirent *readdir(DIR *dirp)
+{
+    return fatfs_readdir(dirp);
+}
+
+int  readdir_r(
+        DIR * dirp,
+        struct dirent * entry,
+        struct dirent ** result)
+{
+    return readdir_r(dirp, entry, result);
+}
+
+void rewinddir(DIR *dirp)
+{
+    fatfs_rewinddir(dirp);
+}
+
+long telldir(DIR *dirp)
+{
+    return fatfs_telldir(dirp);
+}
+
 void _exit(int code)
 {
     (void)code;
