@@ -300,7 +300,7 @@ int  readdir_r(
         struct dirent * entry,
         struct dirent ** result)
 {
-    return readdir_r(dirp, entry, result);
+    return fatfs_readdir_r(dirp, entry, result);
 }
 
 void rewinddir(DIR *dirp)
