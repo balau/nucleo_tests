@@ -948,6 +948,44 @@ int fatfs_closedir(DIR *dirp)
     return -1;
 }
 
+struct dirent *fatfs_readdir(DIR *dirp)
+{
+    struct dirent *ret;
+
+    errno = ENOSYS;
+    ret = NULL;
+
+    return ret;
+}
+
+int  fatfs_readdir_r(
+        DIR *dirp,
+        struct dirent *entry,
+        struct dirent **result)
+{
+    int ret;
+
+    errno = ENOSYS;
+    ret = -1;
+
+    return ret;
+}
+
+void fatfs_rewinddir(DIR *dirp)
+{
+    errno = ENOSYS;
+}
+
+long fatfs_telldir(DIR *dirp)
+{
+    long ret;
+
+    errno = ENOSYS;
+    ret = -1;
+
+    return ret;
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {

@@ -56,5 +56,21 @@ DIR *fatfs_opendir(const char *path);
 extern
 int fatfs_closedir(DIR *dirp);
 
+extern
+struct dirent *fatfs_readdir(DIR *);
+
+extern
+int  fatfs_readdir_r(
+        DIR *__restrict,
+        struct dirent *__restrict,
+        struct dirent **__restrict);
+
+extern
+void fatfs_rewinddir(DIR *);
+
+extern
+long fatfs_telldir(DIR *);
+
+
 #endif /* FATFS_H */
 
