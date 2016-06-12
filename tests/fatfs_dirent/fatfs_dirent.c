@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <limits.h>
 
 static
 void wait_enter(void)
@@ -132,18 +133,94 @@ int test_chdir(void)
 }
 
 static
+int test_ls(DIR *d)
+{
+    long loc;
+    struct dirent *entry;
+
+    rewinddir(d);
+    loc = telldir(d);
+    printf("loc: %ld\n", loc);
+    do
+    {
+        errno = 0; /* to recognize end of entries from errors */
+        entry = readdir(d);
+        if (entry != NULL)
+        {
+            printf("entry: %s (%u)\n", entry->d_name, entry->d_ino);
+            loc = telldir(d);
+            printf("loc: %ld\n", loc);
+        }
+        else
+        {
+            if (errno != 0)
+            {
+                perror(dirpath);
+                return 1;
+            }
+        }
+    } while (entry != NULL);
+
+    return 0;
+}
+
+static
+int test_ls_r(DIR *d)
+{
+    int result;
+    long loc;
+    struct dirent *entry;
+
+    rewinddir(d);
+    loc = telldir(d);
+    printf("loc: %ld\n", loc);
+    do
+    {
+        struct {
+            ino_t d_ino;
+            char d_name[NAME_MAX+1];
+        } entry_storage;
+
+        result = readdir_r(d, (struct dirent *)&entry_storage, &entry);
+        if (result != 0)
+        {
+            perror(dirpath);
+            return 1;
+        }
+        else if (entry != NULL)
+        {
+            printf("entry: %s (%u)\n", entry->d_name, entry->d_ino);
+            loc = telldir(d);
+            printf("loc: %ld\n", loc);
+        }
+    } while (entry != NULL);
+
+    return 0;
+}
+
+static
 int test_list(void)
 {
     int result;
-    DIR *dp;
+    DIR *d;
 
-    dp = opendir(dirpath);
-    if (dp == NULL)
+    d = opendir(dirpath);
+    if (d == NULL)
     {
         perror(dirpath);
         return 1;
     }
-    result = closedir(dp);
+    result = test_ls(d);
+    if (result != 0)
+    {
+        return result;
+    }
+    result = test_ls_r(d);
+    if (result != 0)
+    {
+        return result;
+    }
+    result = closedir(d);
     if (result != 0)
     {
         perror(dirpath);
