@@ -29,5 +29,13 @@
 #  endif
 #endif
 
+#ifndef NAME_MAX
+#  ifdef _POSIX_NAME_MAX
+#    define NAME_MAX _POSIX_NAME_MAX
+#  else
+#    define NAME_MAX 12 /* 8+1+3 like FILENAME.EXT */
+#  endif
+#endif
+
 #endif
 
