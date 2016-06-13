@@ -77,5 +77,8 @@ int fatfs_dirfd(DIR *);
 extern
 DIR *fatfs_fdopendir(int fd);
 
+extern
+void fatfs_seekdir(DIR *, long);
+
 #endif /* FATFS_H */
 

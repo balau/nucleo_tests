@@ -1152,6 +1152,38 @@ long fatfs_telldir(DIR *dirp)
     return ret;
 }
 
+void fatfs_seekdir(DIR *dirp, long loc)
+{
+    if (is_dir(dirp))
+    {
+        long cur_loc;
+
+        cur_loc = fatfs_telldir(dirp);
+        if (loc < cur_loc)
+        {
+            fatfs_rewinddir(dirp);
+        }
+        while(loc > cur_loc)
+        {
+            int ret;
+            struct dirent entry;
+            struct dirent *result;
+
+            ret = fatfs_readdir_r(dirp, &entry, &result);
+            if ((result == NULL) || (ret != 0))
+            {
+                /* POSIX says no errors are defined */
+                break;
+            }
+            cur_loc = fatfs_telldir(dirp);
+        }
+    }
+    else
+    {
+        /* POSIX says no errors are defined */
+    }
+}
+
 __attribute__((constructor))
 void fatfs_init(void)
 {
