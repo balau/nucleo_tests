@@ -71,6 +71,11 @@ void fatfs_rewinddir(DIR *);
 extern
 long fatfs_telldir(DIR *);
 
+extern
+int fatfs_dirfd(DIR *);
+
+extern
+DIR *fatfs_fdopendir(int fd);
 
 #endif /* FATFS_H */
 

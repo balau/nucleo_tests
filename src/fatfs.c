@@ -661,6 +661,31 @@ FRESULT fatfs_open_file_or_dir(const char *pathname, int flags, int fildes)
     return result;
 }
 
+static
+int is_dir(DIR *dirp)
+{
+    int ret;
+    struct fd *pfd;
+
+    pfd = file_struct_get(dirp->fd);
+    if (pfd == NULL)
+    {
+        errno = EBADF;
+        ret = 0;
+    }
+    else if (S_ISDIR(pfd->stat.st_mode))
+    {
+        ret = 1;
+    }
+    else
+    {
+        errno = ENOTDIR;
+        ret = 0;
+    }
+
+    return ret;
+}
+
 /* exported functions */
 
 /* TODO: maybe put in diskio? use real time? */
@@ -986,13 +1011,61 @@ int fatfs_closedir(DIR *dirp)
     return fatfs_close(dirp->fd);
 }
 
+int fatfs_dirfd(DIR *dirp)
+{
+    int ret;
+
+    if (is_dir(dirp))
+    {
+        ret = dirp->fd;
+    }
+    else
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+DIR *fatfs_fdopendir(int fd)
+{
+    DIR *ret;
+    struct fd *pfd;
+
+    pfd = file_struct_get(fd);
+    if (pfd == NULL)
+    {
+        errno = EBADF;
+        ret = NULL;
+    }
+    else if (S_ISDIR(pfd->stat.st_mode))
+    {
+        ret = pfd->opaque;
+    }
+    else
+    {
+        errno = ENOTDIR;
+        ret = NULL;
+    }
+
+    return ret;
+}
+
 struct dirent *fatfs_readdir(DIR *dirp)
 {
     struct dirent *ret;
-    int result;
 
-    result = fatfs_readdir_r(dirp, (struct dirent *)&dirp->cur_entry, &ret);
-    (void)result; /* ignore */
+    if (is_dir(dirp))
+    {
+        (void)fatfs_readdir_r(dirp, (struct dirent *)&dirp->cur_entry, &ret);
+        /* ignore return value */
+    }
+    else
+    {
+        errno = EBADF;
+        ret = NULL;
+    }
 
     return ret;
 }
@@ -1003,30 +1076,38 @@ int fatfs_readdir_r(
         struct dirent **result)
 {
     int ret;
-    FRESULT fresult;
-    FILINFO fno;
 
-    /* TODO: check dirp */
-    fresult = f_readdir(&dirp->ffdir, &fno);
-    if (fresult != FR_OK)
+    if (!is_dir(dirp))
     {
-        errno = fresult2errno(fresult);
+        errno = EBADF;
         ret = -1;
-        *result = NULL;
-    }
-    else if (fno.fname[0] == '\0')
-    {
-        /* end of entries */
-        ret = 0;
-        *result = NULL;
     }
     else
     {
-        ret = 0;
-        dirp->loc++;
-        entry->d_ino = dirp->loc; /* TODO: meaningful number */
-        strncpy(entry->d_name, fno.fname, NAME_MAX+1);
-        *result = entry;
+        FRESULT fresult;
+        FILINFO fno;
+
+        fresult = f_readdir(&dirp->ffdir, &fno);
+        if (fresult != FR_OK)
+        {
+            errno = fresult2errno(fresult);
+            ret = -1;
+            *result = NULL;
+        }
+        else if (fno.fname[0] == '\0')
+        {
+            /* end of entries */
+            ret = 0;
+            *result = NULL;
+        }
+        else
+        {
+            ret = 0;
+            dirp->loc++;
+            entry->d_ino = dirp->loc; /* TODO: meaningful number */
+            strncpy(entry->d_name, fno.fname, NAME_MAX+1);
+            *result = entry;
+        }
     }
 
     return ret;
@@ -1034,17 +1115,23 @@ int fatfs_readdir_r(
 
 void fatfs_rewinddir(DIR *dirp)
 {
-    int result;
-
-    /* TODO: check dirp */
-    result = f_readdir(&dirp->ffdir, NULL);
-    if (result == FR_OK)
+    if (!is_dir(dirp))
     {
-        dirp->loc = 0;
+        /* POSIX says no errors are defined */
     }
     else
     {
-        errno = fresult2errno(result);
+        int result;
+
+        result = f_readdir(&dirp->ffdir, NULL);
+        if (result == FR_OK)
+        {
+            dirp->loc = 0;
+        }
+        else
+        {
+            /* POSIX says no errors are defined */
+        }
     }
 }
 
@@ -1052,8 +1139,15 @@ long fatfs_telldir(DIR *dirp)
 {
     long ret;
 
-    /* TODO: check valid pointer */
-    ret = dirp->loc;
+    if (is_dir(dirp))
+    {
+       ret = dirp->loc;
+    }
+    else
+    {
+        /* POSIX says no errors are defined */
+        ret = -1;
+    }
 
     return ret;
 }
