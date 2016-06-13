@@ -323,6 +323,11 @@ DIR *fdopendir(int fd)
     return fatfs_fdopendir(fd);
 }
 
+void seekdir(DIR *dirp, long loc)
+{
+    fatfs_seekdir(dirp, loc);
+}
+
 void _exit(int code)
 {
     (void)code;
