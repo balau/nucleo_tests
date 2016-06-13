@@ -313,6 +313,16 @@ long telldir(DIR *dirp)
     return fatfs_telldir(dirp);
 }
 
+int dirfd(DIR *dirp)
+{
+    return fatfs_dirfd(dirp);
+}
+
+DIR *fdopendir(int fd)
+{
+    return fatfs_fdopendir(fd);
+}
+
 void _exit(int code)
 {
     (void)code;
