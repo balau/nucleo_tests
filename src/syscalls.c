@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 #include "file.h"
 #include "fatfs.h"
 
@@ -259,6 +260,11 @@ int _link(const char *path1, const char *path2)
 int _stat(const char *path, struct stat *buf)
 {
     return fatfs_stat(path, buf);
+}
+
+int rename(const char *old, const char *new)
+{
+    return fatfs_rename(old, new);
 }
 
 int fsync(int fd)
