@@ -34,6 +34,7 @@ int _close(int fd);
 int _isatty(int fd);
 _off_t _lseek(int fd, _off_t offset, int whence );
 int _unlink(const char *path);
+int _link(const char *path1, const char *path2);
 pid_t _getpid(void);
 int _kill(pid_t pid, int sig);
 int _stat(const char *path, struct stat *buf);
@@ -248,6 +249,11 @@ _off_t _lseek(int fd, _off_t offset, int whence )
 int _unlink(const char *path)
 {
     return fatfs_unlink(path);
+}
+
+int _link(const char *path1, const char *path2)
+{
+    return fatfs_link(path1, path2);
 }
 
 int _stat(const char *path, struct stat *buf)
