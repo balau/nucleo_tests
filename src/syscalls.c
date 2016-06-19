@@ -213,6 +213,23 @@ int _isatty(int fd)
     return ret;
 }
 
+/* newlib uses lseek in stdio, so to link easily without forcing to link fatfs.o
+ * there is a weak implementation of fatfs_lseek that always fails.
+ */
+__attribute__((__weak__))
+_off_t fatfs_lseek(int fd, _off_t offset, int whence )
+{
+    _off_t ret;
+
+    errno = ENOSYS;
+    ret = -1;
+    (void)fd;
+    (void)offset;
+    (void)whence;
+
+    return ret;
+}
+
 _off_t _lseek(int fd, _off_t offset, int whence )
 {
     int ret;
