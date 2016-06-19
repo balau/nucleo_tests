@@ -33,6 +33,7 @@ void wait_enter(void)
 int main(void)
 {
     const char *filepath = "rwtest.txt";
+    const char *filepath2 = "rwtest2.txt";
     FILE *fout;
     FILE *fin;
     char message[80];
@@ -120,12 +121,21 @@ int main(void)
     }
     printf(
             "Done.\n"
-            "Removing file...\n");
-
-    result = remove(filepath);
+            "Renaming file...\n");
+    result = rename(filepath, filepath2);
     if (result != 0)
     {
-        perror(filepath);
+        perror(filepath2);
+        return 1;
+    }
+    printf(
+            "Done.\n"
+            "Removing file...\n");
+
+    result = remove(filepath2);
+    if (result != 0)
+    {
+        perror(filepath2);
         return 1;
     }
     printf("Done.\n");
