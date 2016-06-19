@@ -33,6 +33,9 @@ extern
 int fatfs_unlink(const char *path);
 
 extern
+int fatfs_link(const char *path1, const char *path2);
+
+extern
 int fatfs_fsync(int fd);
 
 extern

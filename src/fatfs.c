@@ -812,6 +812,16 @@ int fatfs_unlink(const char *path)
     return ret;
 }
 
+int fatfs_link(const char *path1, const char *path2)
+{
+    int ret;
+
+    errno = ENOSYS;
+    ret = -1;
+
+    return ret;
+}
+
 int fatfs_fsync(int fd)
 {
     int ret;
