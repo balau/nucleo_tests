@@ -36,6 +36,9 @@ extern
 int fatfs_link(const char *path1, const char *path2);
 
 extern
+int fatfs_rename(const char *old, const char *new);
+
+extern
 int fatfs_fsync(int fd);
 
 extern

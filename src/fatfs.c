@@ -816,8 +816,30 @@ int fatfs_link(const char *path1, const char *path2)
 {
     int ret;
 
-    errno = ENOSYS;
+    /* FAT does not support links */
+    errno = EMLINK; /* maximum number of "links" is 1: the file itself */
     ret = -1;
+    (void)path1; /* ignore */
+    (void)path2; /* ignore */
+
+    return ret;
+}
+
+int fatfs_rename(const char *old, const char *new)
+{
+    int ret;
+    FRESULT result;
+
+    result = f_rename(old, new);
+    if (result != FR_OK)
+    {
+        errno = fresult2errno(result);
+        ret = -1;
+    }
+    else
+    {
+        ret = 0;
+    }
 
     return ret;
 }
