@@ -53,10 +53,11 @@ libmbedtls_clean:
 mbedtls_test.o: $(MBEDTLS_DIR)/library/libmbedtls.a
 
 $(MBEDTLS_DIR)/library/libmbedtls.a:
-	cd $(MBEDTLS_DIR); \
-		export CPPFLAGS="-I/home/francesco/Projects/Nucleo/nucleo_tests/include -D_POSIX_SOURCE=200809L -D_POSIX_C_SOURCE=200809L -D_POSIX_TIMERS=200809L -D_POSIX_MONOTONIC_CLOCK=200809L -D_POSIX_CLOCK_SELECTION=200809L -D_XOPEN_SOURCE=700 -I$(PWD) -DMBEDTLS_CONFIG_FILE=\"<mbedtls_nucleo_config.h>\""; \
+	root_dir=`readlink -f $(ROOT_DIR)`; \
+		cd $(MBEDTLS_DIR); \
+		export CPPFLAGS="-I$$root_dir/include -D_POSIX_SOURCE=200809L -D_POSIX_C_SOURCE=200809L -D_POSIX_TIMERS=200809L -D_POSIX_MONOTONIC_CLOCK=200809L -D_POSIX_CLOCK_SELECTION=200809L -D_XOPEN_SOURCE=700 -I$(PWD) -DMBEDTLS_CONFIG_FILE=\"<mbedtls_nucleo_config.h>\""; \
 		export CFLAGS="$(ARCH_FLAGS) -g -Os -ffunction-sections $$CPPFLAGS"; \
-		export LDFLAGS="$(ARCH_FLAGS) -g --specs=nosys.specs -L/home/francesco/Projects/Nucleo/nucleo_tests/src/ -L/home/francesco/Projects/Nucleo/nucleo_tests/libopencm3/lib"; \
+		export LDFLAGS="$(ARCH_FLAGS) -g --specs=nosys.specs -L$$root_dir/src/ -L$$root_dir/libopencm3/lib"; \
 		export CC=arm-none-eabi-gcc; \
 		export AR=arm-none-eabi-ar; \
 		export LIBS="-lposix -lopencm3_stm32f1"; \
