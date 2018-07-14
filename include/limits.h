@@ -37,5 +37,21 @@
 #  endif
 #endif
 
+#ifndef TIMER_MAX
+#  ifdef _POSIX_TIMER_MAX
+#    define TIMER_MAX _POSIX_TIMER_MAX
+#  else
+#    define TIMER_MAX 32
+#  endif
+#endif
+
+#ifndef SIGQUEUE_MAX
+#  ifdef _POSIX_SIGQUEUE_MAX
+#    define SIGQUEUE_MAX _POSIX_SIGQUEUE_MAX
+#  else
+#    define SIGQUEUE_MAX 32
+#  endif
+#endif
+
 #endif
 
