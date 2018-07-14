@@ -33,6 +33,15 @@ static struct {
     struct signal_queue_item items[SIGQUEUE_MAX];
 } signal_queue;
 
+#define SIGNAL_MAX 32
+
+struct signal_action
+{
+    struct sigaction act;
+};
+
+struct signal_action signal_actions[SIGNAL_MAX + 1];
+
 static
 int signal_enqueue(int sig, union sigval value)
 {
@@ -135,6 +144,23 @@ int sigaction(
         const struct sigaction *restrict act,
         struct sigaction *restrict oact)
 {
-    return -1;
+    int ret;
+
+    if ( (sig > SIGNAL_MAX) || (sig < 0) )
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+    else
+    {
+        if (oact != NULL)
+        {
+            *oact = signal_actions[sig].act;
+        }
+        signal_actions[sig].act = *act;
+        ret = 0;
+    }
+
+    return ret;
 }
 
