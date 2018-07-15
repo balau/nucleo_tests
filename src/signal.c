@@ -17,6 +17,7 @@
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <signal.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
@@ -27,7 +28,7 @@
 struct signal_queue_item
 {
     int sig;
-    union sigval value;
+    siginfo_t info;
     int order;
 };
 
@@ -46,10 +47,11 @@ struct signal_action
 static
 void pendsv_interrupt_raise(void);
 
+int signal_enqueue(int sig, const siginfo_t *info);
+
 struct signal_action signal_actions[SIGNAL_MAX + 1];
 
-static
-int signal_enqueue(int sig, union sigval value)
+int signal_enqueue(int sig, const siginfo_t *info)
 {
     int ret;
     int iqueue;
@@ -62,7 +64,7 @@ int signal_enqueue(int sig, union sigval value)
         if (signal_queue.items[iqueue].sig == 0)
         {
             signal_queue.items[iqueue].sig = sig;
-            signal_queue.items[iqueue].value = value;
+            signal_queue.items[iqueue].info = *info;
             signal_queue.items[iqueue].order = next_order;
             signal_queue.last_order = next_order;
             pendsv_interrupt_raise();
@@ -83,7 +85,7 @@ int signal_enqueue(int sig, union sigval value)
 }
 
 static
-int signal_dequeue(int *sig, union sigval *value)
+int signal_dequeue(int *sig, siginfo_t *info)
 {
     int ret;
     int iqueue;
@@ -104,7 +106,7 @@ int signal_dequeue(int *sig, union sigval *value)
     if (iqueue_chosen != -1)
     {
         *sig = signal_queue.items[iqueue_chosen].sig;
-        *value = signal_queue.items[iqueue_chosen].value;
+        *info = signal_queue.items[iqueue_chosen].info;
         signal_queue.items[iqueue_chosen].sig = 0;
         ret = 0;
     }
@@ -131,7 +133,12 @@ int sigqueue (pid_t pid, int sig, union sigval value)
     }
     else if (sig != 0)
     {
-        ret = signal_enqueue(sig, value);
+        siginfo_t info;
+
+        memset(&info, 0, sizeof(siginfo_t));
+        info.si_value = value;
+        info.si_signo = sig;
+        ret = signal_enqueue(sig, &info);
     }
     else
     {
@@ -211,16 +218,13 @@ int sigaction(
 }
 
 static
-void signal_act(int sig, union sigval value)
+void signal_act(int sig, siginfo_t *info)
 {
     if (signal_actions[sig].act.sa_flags & SA_SIGINFO)
     {
-        siginfo_t info;
         void (*sa_sigaction)(int, siginfo_t *, void *);
         sa_sigaction = (void *)signal_actions[sig].act.sa_sigaction;
-        info.si_value = value;
-        info.si_signo = sig;
-        sa_sigaction(sig, &info, NULL);
+        sa_sigaction(sig, info, NULL);
     }
     else
     {
@@ -237,11 +241,11 @@ void pendsv_interrupt_raise(void)
 void pend_sv_handler(void)
 {
     int sig;
-    union sigval value;
+    siginfo_t info;
 
-    if (signal_dequeue(&sig, &value) == 0)
+    if (signal_dequeue(&sig, &info) == 0)
     {
-        signal_act(sig, value);
+        signal_act(sig, &info);
     }
 }
 
