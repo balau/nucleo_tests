@@ -20,6 +20,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
+#include <libopencm3/cm3/nvic.h>
+#include <libopencm3/cm3/cortex.h>
+#include <libopencm3/cm3/scb.h>
 
 struct signal_queue_item
 {
@@ -40,6 +43,9 @@ struct signal_action
     struct sigaction act;
 };
 
+static
+void pendsv_interrupt_raise(void);
+
 struct signal_action signal_actions[SIGNAL_MAX + 1];
 
 static
@@ -49,7 +55,7 @@ int signal_enqueue(int sig, union sigval value)
     int iqueue;
     int next_order;
 
-    /* TODO: mutex/disable irq */
+    cm_disable_interrupts();
     next_order = signal_queue.last_order + 1;
     for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
     {
@@ -59,15 +65,54 @@ int signal_enqueue(int sig, union sigval value)
             signal_queue.items[iqueue].value = value;
             signal_queue.items[iqueue].order = next_order;
             signal_queue.last_order = next_order;
+            pendsv_interrupt_raise();
+
+            ret = 0;
             break;
         }
     }
+    cm_enable_interrupts();
 
     if (iqueue == SIGQUEUE_MAX)
     {
         errno = EAGAIN;
         ret = -1;
     }
+
+    return ret;
+}
+
+static
+int signal_dequeue(int *sig, union sigval *value)
+{
+    int ret;
+    int iqueue;
+    int order = -1;
+    int iqueue_chosen = -1;
+
+    cm_disable_interrupts();
+    for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
+    {
+        if ( (signal_queue.items[iqueue].sig != 0) && (
+                    (iqueue_chosen == -1) ||
+                    ((signal_queue.items[iqueue].order - order) < 0)))
+        {
+            iqueue_chosen = iqueue;
+            order = signal_queue.items[iqueue].order;
+        }
+    }
+    if (iqueue_chosen != -1)
+    {
+        *sig = signal_queue.items[iqueue_chosen].sig;
+        *value = signal_queue.items[iqueue_chosen].value;
+        signal_queue.items[iqueue_chosen].sig = 0;
+        ret = 0;
+    }
+    else
+    {
+        ret = -1;
+    }
+    cm_enable_interrupts();
 
     return ret;
 }
@@ -86,7 +131,7 @@ int sigqueue (pid_t pid, int sig, union sigval value)
     }
     else if (sig != 0)
     {
-        ret = signal_enqueue(pid, value);
+        ret = signal_enqueue(sig, value);
     }
     else
     {
@@ -158,9 +203,45 @@ int sigaction(
             *oact = signal_actions[sig].act;
         }
         signal_actions[sig].act = *act;
+        pendsv_interrupt_raise();
         ret = 0;
     }
 
     return ret;
+}
+
+static
+void signal_act(int sig, union sigval value)
+{
+    if (signal_actions[sig].act.sa_flags & SA_SIGINFO)
+    {
+        siginfo_t info;
+        void (*sa_sigaction)(int, siginfo_t *, void *);
+        sa_sigaction = (void *)signal_actions[sig].act.sa_sigaction;
+        info.si_value = value;
+        info.si_signo = sig;
+        sa_sigaction(sig, &info, NULL);
+    }
+    else
+    {
+        signal_actions[sig].act.sa_handler(sig);
+    }
+}
+
+static
+void pendsv_interrupt_raise(void)
+{
+    SCB_ICSR |= SCB_ICSR_PENDSVSET;
+}
+
+void pend_sv_handler(void)
+{
+    int sig;
+    union sigval value;
+
+    if (signal_dequeue(&sig, &value) == 0)
+    {
+        signal_act(sig, value);
+    }
 }
 
