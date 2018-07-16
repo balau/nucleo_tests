@@ -395,7 +395,7 @@ void pend_sv_handler(void)
 {
     siginfo_t info;
 
-    if (signal_dequeue(&info) == 0)
+    while (signal_dequeue(&info) == 0)
     {
         signal_act(&info);
     }

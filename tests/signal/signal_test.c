@@ -42,11 +42,53 @@ int main(void)
         return 1;
     }
 
+    if (sigaction(
+                SIGUSR1,
+                &act,
+                NULL) != 0)
+    {
+        perror("sigaction");
+        return 1;
+    }
+
+    if (sighold(SIGALRM) != 0)
+    {
+        perror("sighold");
+        return 1;
+    }
+    if (sighold(SIGUSR1) != 0)
+    {
+        perror("sighold");
+        return 1;
+    }
+    printf("holding...\n");
+
     if (raise(SIGALRM) != 0)
     {
         perror("raise");
         return 1;
     }
+    printf("raised...\n");
+
+    if (raise(SIGUSR1) != 0)
+    {
+        perror("raise");
+        return 1;
+    }
+    printf("raised...\n");
+
+    printf("unblocking...\n");
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGALRM);
+    sigaddset(&set, SIGUSR1);
+
+    if (sigprocmask(SIG_UNBLOCK, &set, NULL) != 0)
+    {
+        perror("sigprocmask");
+        return 1;
+    }
+    printf("unblocked!\n");
 }
 
 
