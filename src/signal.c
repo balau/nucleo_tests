@@ -47,6 +47,10 @@ struct signal_action
 static
 void pendsv_interrupt_raise(void);
 
+static
+sigset_t procmask;
+
+static
 struct signal_action signal_actions[SIGNAL_MAX + 1];
 
 int sigqueue_info(const siginfo_t *info)
@@ -105,9 +109,27 @@ int signal_dequeue(siginfo_t *info)
     }
     for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
     {
-        if ( (signal_queue.items[iqueue].info.si_signo != 0) && (
-                    (iqueue_chosen == -1) ||
-                    ((signal_queue.items[iqueue].order - order) < 0)))
+        int candidate;
+        int important;
+
+        candidate =
+            (signal_queue.items[iqueue].info.si_signo != 0) &&
+            !sigismember(&procmask, signal_queue.items[iqueue].info.si_signo);
+
+        if (!candidate)
+        {
+            important = 0;
+        }
+        else if (iqueue_chosen == -1)
+        {
+            important = 1;
+        }
+        else
+        {
+            important = ((signal_queue.items[iqueue].order - order) < 0);
+        }
+
+        if (candidate && important)
         {
             iqueue_chosen = iqueue;
             order = signal_queue.items[iqueue].order;
@@ -232,12 +254,126 @@ int sigaction(
     return ret;
 }
 
+int siginterrupt(int sig, int flag)
+{
+    int ret;
+    struct sigaction act;
+
+    (void) sigaction(sig, NULL, &act);
+    if (flag)
+    {
+        act.sa_flags &= ~SA_RESTART;
+    }
+    else
+    {
+        act.sa_flags |= SA_RESTART;
+    }
+    ret = sigaction(sig, &act, NULL);
+
+    return ret;
+}
+
+static
+int sigholdrel(int how, int sig)
+{
+    int ret;
+
+    if (sig <= 0)
+    {
+        errno = EINVAL;
+        ret = -1;
+    }/*TODO: max?*/
+    else
+    {
+        sigset_t set;
+
+        sigemptyset(&set);
+        sigaddset(&set, sig);
+        sigprocmask(how, &set, NULL);
+
+        ret = 0;
+    }
+    return ret;
+}
+
+int sighold(int sig)
+{
+    return sigholdrel(SIG_BLOCK, sig);
+}
+
+int sigrelse(int sig)
+{
+    return sigholdrel(SIG_UNBLOCK, sig);
+}
+
+int sigprocmask(
+        int how,
+        const sigset_t *restrict set,
+        sigset_t *restrict oset)
+{
+    int ret;
+
+    if (oset != NULL)
+    {
+        *oset = procmask;
+    }
+    if (set == NULL)
+    {
+        /* do nothing */
+        ret = 0;
+    }
+    else if (how == SIG_BLOCK)
+    {
+        procmask |= *set;
+        ret = 0;
+    }
+    else if (how == SIG_SETMASK)
+    {
+        procmask = *set;
+        pendsv_interrupt_raise();
+        ret = 0;
+    }
+    else if (how == SIG_UNBLOCK)
+    {
+        procmask &= ~(*set);
+        pendsv_interrupt_raise();
+        ret = 0;
+    }
+    else
+    {
+        errno = EINVAL;
+        ret = -1;
+    }
+
+    return ret;
+}
+
+int sigignore(int sig)
+{
+    int ret;
+    struct sigaction act;
+
+    (void) sigaction(sig, NULL, &act);
+    act.sa_handler = SIG_IGN;
+    ret = sigaction(sig, &act, NULL);
+
+    return ret;
+}
+
 static
 void signal_act(siginfo_t *info)
 {
     int sig = info->si_signo;
 
-    if (signal_actions[sig].act.sa_flags & SA_SIGINFO)
+    if (signal_actions[sig].act.sa_handler == SIG_IGN)
+    {
+        /* ignore */
+    }
+    else if (signal_actions[sig].act.sa_handler == SIG_DFL)
+    {
+        /* TODO */
+    }
+    else if (signal_actions[sig].act.sa_flags & SA_SIGINFO)
     {
         void (*sa_sigaction)(int, siginfo_t *, void *);
         sa_sigaction = (void *)signal_actions[sig].act.sa_sigaction;

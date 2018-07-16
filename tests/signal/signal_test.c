@@ -22,7 +22,8 @@
 static
 void alarm_handler(int signo, siginfo_t *info, void *context)
 {
-    printf("Alarm! %d %d %d %p\n", signo, info->si_signo, info->si_value.sival_int, context);
+    (void)context;
+    printf("Alarm! %d %d %d %d\n", signo, info->si_signo, info->si_value.sival_int, info->si_code);
 }
 
 int main(void)
