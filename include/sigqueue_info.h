@@ -16,40 +16,13 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with nucleo_tests.  If not, see <http://www.gnu.org/licenses/>.
  */
+#ifndef SIGQUEUE_INFO_H
+#define SIGQUEUE_INFO_H
+
 #include <signal.h>
-#include <unistd.h>
-#include <string.h>
-#include <errno.h>
-#include "sigqueue_info.h"
 
-int kill (pid_t pid, int sig)
-{
-    int ret;
-    pid_t this;
+extern
+int sigqueue_info (const siginfo_t *info);
 
-    this = getpid();
-
-    if ( (pid != this) && (pid > 0) )
-    {
-        errno = ESRCH;
-        ret = -1;
-    }
-    else if (sig != 0)
-    {
-        siginfo_t info;
-
-        memset(&info, 0, sizeof(info));
-        info.si_signo = sig;
-        info.si_code = SI_USER;
-        info.si_pid = this;
-
-        ret = sigqueue_info(&info);
-    }
-    else
-    {
-        ret = 0;
-    }
-
-    return ret;
-}
+#endif /* SIGQUEUE_INFO_H */
 

@@ -24,10 +24,10 @@
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/cm3/cortex.h>
 #include <libopencm3/cm3/scb.h>
+#include "sigqueue_info.h"
 
 struct signal_queue_item
 {
-    int sig;
     siginfo_t info;
     int order;
 };
@@ -47,23 +47,25 @@ struct signal_action
 static
 void pendsv_interrupt_raise(void);
 
-int signal_enqueue(int sig, const siginfo_t *info);
-
 struct signal_action signal_actions[SIGNAL_MAX + 1];
 
-int signal_enqueue(int sig, const siginfo_t *info)
+int sigqueue_info(const siginfo_t *info)
 {
     int ret;
     int iqueue;
     int next_order;
+    bool faults_already_disabled;
 
-    cm_disable_interrupts();
+    faults_already_disabled = cm_is_masked_faults();
+    if (!faults_already_disabled)
+    {
+        cm_disable_faults();
+    }
     next_order = signal_queue.last_order + 1;
     for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
     {
-        if (signal_queue.items[iqueue].sig == 0)
+        if (signal_queue.items[iqueue].info.si_signo == 0)
         {
-            signal_queue.items[iqueue].sig = sig;
             signal_queue.items[iqueue].info = *info;
             signal_queue.items[iqueue].order = next_order;
             signal_queue.last_order = next_order;
@@ -73,7 +75,10 @@ int signal_enqueue(int sig, const siginfo_t *info)
             break;
         }
     }
-    cm_enable_interrupts();
+    if (!faults_already_disabled)
+    {
+        cm_enable_faults();
+    }
 
     if (iqueue == SIGQUEUE_MAX)
     {
@@ -85,17 +90,22 @@ int signal_enqueue(int sig, const siginfo_t *info)
 }
 
 static
-int signal_dequeue(int *sig, siginfo_t *info)
+int signal_dequeue(siginfo_t *info)
 {
     int ret;
     int iqueue;
     int order = -1;
     int iqueue_chosen = -1;
+    bool faults_already_disabled;
 
-    cm_disable_interrupts();
+    faults_already_disabled = cm_is_masked_faults();
+    if (!faults_already_disabled)
+    {
+        cm_disable_faults();
+    }
     for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
     {
-        if ( (signal_queue.items[iqueue].sig != 0) && (
+        if ( (signal_queue.items[iqueue].info.si_signo != 0) && (
                     (iqueue_chosen == -1) ||
                     ((signal_queue.items[iqueue].order - order) < 0)))
         {
@@ -105,16 +115,18 @@ int signal_dequeue(int *sig, siginfo_t *info)
     }
     if (iqueue_chosen != -1)
     {
-        *sig = signal_queue.items[iqueue_chosen].sig;
         *info = signal_queue.items[iqueue_chosen].info;
-        signal_queue.items[iqueue_chosen].sig = 0;
+        signal_queue.items[iqueue_chosen].info.si_signo = 0;
         ret = 0;
     }
     else
     {
         ret = -1;
     }
-    cm_enable_interrupts();
+    if (!faults_already_disabled)
+    {
+        cm_enable_faults();
+    }
 
     return ret;
 }
@@ -138,7 +150,8 @@ int sigqueue (pid_t pid, int sig, union sigval value)
         memset(&info, 0, sizeof(siginfo_t));
         info.si_value = value;
         info.si_signo = sig;
-        ret = signal_enqueue(sig, &info);
+        info.si_code = SI_QUEUE;
+        ret = sigqueue_info(&info);
     }
     else
     {
@@ -209,8 +222,10 @@ int sigaction(
         {
             *oact = signal_actions[sig].act;
         }
-        signal_actions[sig].act = *act;
-        pendsv_interrupt_raise();
+        if (act != NULL)
+        {
+            signal_actions[sig].act = *act;
+        }
         ret = 0;
     }
 
@@ -218,8 +233,10 @@ int sigaction(
 }
 
 static
-void signal_act(int sig, siginfo_t *info)
+void signal_act(siginfo_t *info)
 {
+    int sig = info->si_signo;
+
     if (signal_actions[sig].act.sa_flags & SA_SIGINFO)
     {
         void (*sa_sigaction)(int, siginfo_t *, void *);
@@ -240,12 +257,11 @@ void pendsv_interrupt_raise(void)
 
 void pend_sv_handler(void)
 {
-    int sig;
     siginfo_t info;
 
-    if (signal_dequeue(&sig, &info) == 0)
+    if (signal_dequeue(&info) == 0)
     {
-        signal_act(sig, &info);
+        signal_act(&info);
     }
 }
 
