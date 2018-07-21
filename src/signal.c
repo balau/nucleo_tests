@@ -25,6 +25,7 @@
 #include <libopencm3/cm3/cortex.h>
 #include <libopencm3/cm3/scb.h>
 #include "sigqueue_info.h"
+#include "timespec.h"
 
 struct signal_queue_item
 {
@@ -53,18 +54,39 @@ sigset_t procmask;
 static
 struct signal_action signal_actions[SIGNAL_MAX + 1];
 
-int sigqueue_info(const siginfo_t *info)
+static
+int critical_section_begin(void)
 {
-    int ret;
-    int iqueue;
-    int next_order;
-    bool faults_already_disabled;
+    int faults_already_disabled;
 
     faults_already_disabled = cm_is_masked_faults();
     if (!faults_already_disabled)
     {
         cm_disable_faults();
     }
+
+    return faults_already_disabled;
+}
+
+static
+void critical_section_end(int state)
+{
+    int faults_already_disabled = state;
+
+    if (!faults_already_disabled)
+    {
+        cm_enable_faults();
+    }
+}
+
+int sigqueue_info(const siginfo_t *info)
+{
+    int ret;
+    int iqueue;
+    int next_order;
+    int cs_state;
+
+    cs_state = critical_section_begin();
     next_order = signal_queue.last_order + 1;
     for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
     {
@@ -79,10 +101,7 @@ int sigqueue_info(const siginfo_t *info)
             break;
         }
     }
-    if (!faults_already_disabled)
-    {
-        cm_enable_faults();
-    }
+    critical_section_end(cs_state);
 
     if (iqueue == SIGQUEUE_MAX)
     {
@@ -94,19 +113,16 @@ int sigqueue_info(const siginfo_t *info)
 }
 
 static
-int signal_dequeue(siginfo_t *info)
+int signal_dequeue(const sigset_t *set, siginfo_t *info)
 {
     int ret;
     int iqueue;
     int order = -1;
     int iqueue_chosen = -1;
-    bool faults_already_disabled;
+    int cs_state;
 
-    faults_already_disabled = cm_is_masked_faults();
-    if (!faults_already_disabled)
-    {
-        cm_disable_faults();
-    }
+    cs_state = critical_section_begin();
+
     for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
     {
         int candidate;
@@ -114,7 +130,7 @@ int signal_dequeue(siginfo_t *info)
 
         candidate =
             (signal_queue.items[iqueue].info.si_signo != 0) &&
-            !sigismember(&procmask, signal_queue.items[iqueue].info.si_signo);
+            sigismember(set, signal_queue.items[iqueue].info.si_signo);
 
         if (!candidate)
         {
@@ -145,10 +161,19 @@ int signal_dequeue(siginfo_t *info)
     {
         ret = -1;
     }
-    if (!faults_already_disabled)
-    {
-        cm_enable_faults();
-    }
+    critical_section_end(cs_state);
+
+    return ret;
+}
+
+static
+int signal_dequeue_procmask(siginfo_t *info)
+{
+    int ret;
+    sigset_t set;
+
+    set = ~procmask;
+    ret = signal_dequeue(&set, info);
 
     return ret;
 }
@@ -385,6 +410,102 @@ void signal_act(siginfo_t *info)
     }
 }
 
+int sigpending (sigset_t *set)
+{
+    int iqueue;
+    sigset_t blocked;
+    int cs_state;
+    
+    sigemptyset(set);
+
+    cs_state = critical_section_begin();
+
+    sigprocmask(SIG_SETMASK, NULL, &blocked);
+
+    for (iqueue = 0; iqueue < SIGQUEUE_MAX; iqueue++)
+    {
+        int sig;
+
+        sig = signal_queue.items[iqueue].info.si_signo;
+        if ( (sig != 0) && sigismember(&blocked, sig) )
+        {
+            sigaddset(set, sig);
+        }
+
+    }
+
+    critical_section_end(cs_state);
+
+    return 0;
+}
+
+int sigsuspend(const sigset_t *sigmask)
+{
+    sigset_t saved_mask;
+
+    sigprocmask(SIG_SETMASK, sigmask, &saved_mask);
+    
+    /* TODO: wait */
+
+    sigprocmask(SIG_SETMASK, &saved_mask, NULL);
+
+    errno = EINTR;
+    return -1;
+}
+
+int sigtimedwait(
+        const sigset_t *restrict set,
+        siginfo_t *restrict info,
+        const struct timespec *restrict timeout)
+{
+    int ret;
+    struct timespec start;
+
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    while(signal_dequeue(set, info) != 0)
+    {
+        struct timespec now;
+        struct timespec elapsed;
+
+        /* TODO: wait event or timeout */
+
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        timespec_diff(&now, &start, &elapsed);
+        if (timespec_diff(timeout, &elapsed, NULL) <= 0)
+        {
+            errno = EAGAIN;
+            ret = -1;
+            break;
+        }
+
+    }
+
+    return ret;
+}
+
+int sigwaitinfo(
+        const sigset_t *restrict set,
+        siginfo_t *restrict info)
+{
+    return sigtimedwait(set, info, &TIMESPEC_INFINITY);
+}
+
+int sigwait(const sigset_t *restrict set, int *restrict sig)
+{
+    int ret;
+
+    siginfo_t info;
+
+    ret = sigwaitinfo(set, &info);
+    if (ret == 0)
+    {
+        *sig = info.si_signo;
+    }
+
+    return ret;
+}
+
 static
 void pendsv_interrupt_raise(void)
 {
@@ -395,7 +516,7 @@ void pend_sv_handler(void)
 {
     siginfo_t info;
 
-    while (signal_dequeue(&info) == 0)
+    while (signal_dequeue_procmask(&info) == 0)
     {
         signal_act(&info);
     }

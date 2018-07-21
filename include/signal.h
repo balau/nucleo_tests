@@ -66,10 +66,10 @@ int sigemptyset (sigset_t *);
 int sigpending (sigset_t *);
 int sigsuspend (const sigset_t *);
 int sigpause (int);
-int siginterrupt(int sig, int flag);
-int sighold(int sig);
-int sigrelse(int sig);
-int sigignore(int sig);
+int siginterrupt(int, int);
+int sighold(int);
+int sigrelse(int);
+int sigignore(int);
 
 #endif /* SIGNAL_H */
 
