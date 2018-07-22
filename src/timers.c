@@ -21,17 +21,10 @@
 #include <errno.h>
 #include <string.h>
 #include <limits.h>
+#include <libopencm3/cm3/nvic.h>
+#include <libopencm3/cm3/cortex.h>
 #include "timespec.h"
-
-/* TODO: ISR */
-static void isr(void)
-{
-    // read clock
-    // see if some timer has fired
-    //   manage fired timer
-    // check next timer
-    // schedule next isr
-}
+#include "sigqueue_info.h"
 
 struct sys_timer
 {
@@ -45,6 +38,31 @@ struct sys_timer
 
 static
 struct sys_timer sys_timers[TIMER_MAX];
+
+static
+int critical_section_begin(void)
+{
+    int faults_already_disabled;
+
+    faults_already_disabled = cm_is_masked_faults();
+    if (!faults_already_disabled)
+    {
+        cm_disable_faults();
+    }
+
+    return faults_already_disabled;
+}
+
+static
+void critical_section_end(int state)
+{
+    int faults_already_disabled = state;
+
+    if (!faults_already_disabled)
+    {
+        cm_enable_faults();
+    }
+}
 
 static
 int sys_timerid2td(timer_t timerid)
@@ -62,6 +80,16 @@ static
 int sys_timer_isallocated(int td)
 {
     return (sys_timers[td].timerid != 0);
+}
+
+static
+void sys_timer_time_to_expiration(int td, struct timespec *t)
+{
+    struct timespec now;
+
+    /* Assuming timer is allocated and armed */
+    clock_gettime(sys_timers[td].clockid, &now);
+    timespec_diff(&sys_timers[td].value.it_value, &now, t);
 }
 
 static
@@ -108,6 +136,7 @@ int sys_timer_alloc(void)
     return ret;
 }
 
+static
 int sys_timer_iter(int td)
 {
     int ret = -1;
@@ -136,7 +165,25 @@ int sys_timer_iter(int td)
 static
 int sys_timer_expires_before(int t1, int t2)
 {
-    return 1;
+    int ret;
+    struct timespec to_expiration_t1;
+    struct timespec to_expiration_t2;
+
+    sys_timer_time_to_expiration(t1, &to_expiration_t1);
+    sys_timer_time_to_expiration(t2, &to_expiration_t2);
+
+    if (timespec_diff(&to_expiration_t1, &to_expiration_t2, NULL) >= 0)
+    {
+        /* t2 expires before t1 */
+        ret = 0;
+    }
+    else
+    {
+        /* t1 expires before t2 */
+        ret = 1;
+    }
+
+    return ret;
 }
 
 static
@@ -160,6 +207,98 @@ int sys_timer_next_expiring(void)
     }
 
     return td_expiring;
+}
+
+static
+void hw_timer_init(void)
+{
+}
+
+static
+void hw_timer_start(const struct timespec *interval)
+{
+}
+
+static
+void hw_timer_stop(void)
+{
+}
+
+static
+void timer_expired(int td)
+{
+    siginfo_t info;
+    int ret;
+
+    switch(sys_timers[td].sevp.sigev_notify)
+    {
+        case SIGEV_NONE:
+            /* Ignore */
+            break;
+
+        case SIGEV_SIGNAL:
+
+            memset(&info, 0, sizeof(siginfo_t));
+            info.si_value = sys_timers[td].sevp.sigev_value;
+            info.si_signo = sys_timers[td].sevp.sigev_signo;
+            info.si_code = SI_TIMER;
+            ret = sigqueue_info(&info);
+            /* TODO: ret != 0? */
+            (void)ret;
+            break;
+
+        case SIGEV_THREAD:
+            sys_timers[td].sevp.sigev_notify_function(sys_timers[td].sevp.sigev_value);
+            break;
+    }
+    if (timespec_diff(&sys_timers[td].value.it_interval, &TIMESPEC_ZERO, NULL) > 0)
+    {
+        struct timespec now;
+        
+        /* Re-arm timer */
+        clock_gettime(sys_timers[td].clockid, &now);
+        timespec_add(
+                &now,
+                &sys_timers[td].value.it_interval,
+                &sys_timers[td].value.it_value);
+    }
+    else
+    {
+        /* Disarm timer */
+        sys_timers[td].value.it_value = TIMESPEC_ZERO;
+    }
+}
+
+static
+void sys_timers_manage(void)
+{
+    int td_expiring;
+    int expired;
+
+    do {
+        td_expiring = sys_timer_next_expiring();
+        if (td_expiring != -1)
+        {
+            struct timespec to_expiration;
+
+            sys_timer_time_to_expiration(td_expiring, &to_expiration);
+            if (timespec_diff(&to_expiration, &TIMESPEC_ZERO, NULL) <= 0)
+            {
+                timer_expired(td_expiring);
+                expired = 1;
+            }
+            else
+            {
+                hw_timer_start(&to_expiration);
+                expired = 0;
+            }
+        }
+        else
+        {
+            hw_timer_stop();
+            expired = 0;
+        }
+    } while(expired);
 }
 
 static
@@ -198,7 +337,8 @@ int timer_create(
                 tinfo->sevp.sigev_signo = SIGALRM;
                 tinfo->sevp.sigev_value.sival_int = tinfo->timerid;
             }
-            ret = tinfo->timerid;
+            *timerid = tinfo->timerid;
+            ret = 0;
         }
         else
         {
@@ -220,7 +360,7 @@ int timer_delete(timer_t timerid)
     int ret;
     int td;
 
-    td = sys_td2timerid(timerid);
+    td = sys_timerid2td(timerid);
     if (sys_timer_isallocated(td))
     {
         /* TODO: stop timer? */
@@ -245,16 +385,40 @@ int timer_settime(
     int ret;
     int td;
 
-    td = sys_td2timerid(timerid);
+    td = sys_timerid2td(timerid);
     if (sys_timer_isallocated(td))
     {
-        /* TODO: convert value ABS */
         if (old_value != NULL)
         {
-            *old_value = sys_timers[td].value;
+            if (sys_timer_isarmed(td))
+            {
+                sys_timer_time_to_expiration(td, &old_value->it_value);
+                old_value->it_interval = sys_timers[td].value.it_interval;
+            }
+            else
+            {
+                *old_value = sys_timers[td].value;
+            }
         }
-        sys_timers[td].value = *new_value;
-        /* TODO: arm ISR */
+        if (
+                (timespec_diff(&new_value->it_value, &TIMESPEC_ZERO, NULL) != 0) &&
+                (!(flags & TIMER_ABSTIME)) )
+        {
+            struct timespec now;
+
+            clock_gettime(sys_timers[td].clockid, &now);
+            timespec_add(
+                    &now,
+                    &new_value->it_value,
+                    &sys_timers[td].value.it_value);
+            sys_timers[td].value.it_interval = new_value->it_interval;
+        }
+        else
+        {
+            sys_timers[td].value = *new_value;
+        }
+
+        sys_timers_manage();
         ret = 0;
     }
     else
@@ -263,7 +427,7 @@ int timer_settime(
         ret = -1;
     }
 
-    return -1;
+    return ret;
 }
 
 int timer_gettime(
@@ -273,11 +437,18 @@ int timer_gettime(
     int ret;
     int td;
 
-    td = sys_td2timerid(timerid);
+    td = sys_timerid2td(timerid);
     if (sys_timer_isallocated(td))
     {
-        /* TODO: convert value ABS */
-        *curr_value = sys_timers[td].value;
+        if (sys_timer_isarmed(td))
+        {
+            sys_timer_time_to_expiration(td, &curr_value->it_value);
+            curr_value->it_interval = sys_timers[td].value.it_interval;
+        }
+        else
+        {
+            *curr_value = sys_timers[td].value;
+        }
         ret = 0;
     }
     else
@@ -294,7 +465,7 @@ int timer_getoverrun(timer_t timerid)
     int ret;
     int td;
 
-    td = sys_td2timerid(timerid);
+    td = sys_timerid2td(timerid);
     if (sys_timer_isallocated(td))
     {
         ret = sys_timers[td].overrun;

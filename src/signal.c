@@ -522,3 +522,5 @@ void pend_sv_handler(void)
     }
 }
 
+/* TODO: constructor with default values for signals */
+
