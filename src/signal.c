@@ -18,6 +18,7 @@
  */
 #include <signal.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
@@ -386,6 +387,54 @@ int sigignore(int sig)
 }
 
 static
+void signal_act_default(siginfo_t *info)
+{
+    switch(info->si_signo)
+    {
+        case SIGABRT:
+        case SIGBUS:
+        case SIGFPE:
+        case SIGILL:
+        case SIGQUIT:
+        case SIGSEGV:
+        case SIGSYS:
+        case SIGTRAP:
+        case SIGXCPU:
+        case SIGXFSZ:
+            /* abnormal termination with additional actions */
+            /* follow through... */
+        case SIGALRM:
+        case SIGHUP:
+        case SIGINT:
+        case SIGKILL:
+        case SIGPIPE:
+        case SIGTERM:
+        case SIGUSR1:
+        case SIGUSR2:
+        case SIGPOLL:
+        case SIGPROF:
+        case SIGVTALRM:
+        default:
+            /* abnormal termination */
+            _exit(EXIT_FAILURE);
+            break;
+        case SIGCHLD:
+        case SIGURG:
+            /* ignore */
+            break;
+        case SIGSTOP:
+        case SIGTSTP:
+        case SIGTTIN:
+        case SIGTTOU:
+            /* TODO: stop */
+            break;
+        case SIGCONT:
+            /* TODO: continue */
+            break;
+    }
+}
+
+static
 void signal_act(siginfo_t *info)
 {
     int sig = info->si_signo;
@@ -396,7 +445,7 @@ void signal_act(siginfo_t *info)
     }
     else if (signal_actions[sig].act.sa_handler == SIG_DFL)
     {
-        /* TODO */
+        signal_act_default(info);
     }
     else if (signal_actions[sig].act.sa_flags & SA_SIGINFO)
     {
@@ -521,6 +570,4 @@ void pend_sv_handler(void)
         signal_act(&info);
     }
 }
-
-/* TODO: constructor with default values for signals */
 
